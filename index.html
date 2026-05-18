@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0f1117">
+<title>🍱 午餐決策系統</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #161922;
+    --surface2: #1e2130;
+    --border: #2a2d3a;
+    --gold: #f0c040;
+    --gold2: #e8a020;
+    --text: #e8e8e8;
+    --muted: #888;
+    --danger: #e05555;
+    --green: #4caf82;
+    --radius: 12px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Layout ── */
+  #app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header {
+    padding: 16px 20px 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-top { display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 20px; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+  .date-badge {
+    font-size: 11px; color: var(--muted); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px;
+  }
+
+  /* ── Tab Bar ── */
+  .tab-bar {
+    display: flex; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 61px; z-index: 99;
+  }
+  .tab-btn {
+    flex: 1; padding: 12px 4px; font-size: 13px; color: var(--muted);
+    background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all .2s; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab-icon { font-size: 18px; }
+
+  /* ── Content ── */
+  .content { flex: 1; overflow-y: auto; padding: 16px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px;
+  }
+
+  /* ── Name Input ── */
+  .name-section { margin-bottom: 16px; }
+  .name-row { display: flex; gap: 8px; align-items: center; }
+  .name-display {
+    font-size: 18px; font-weight: 700; color: var(--gold);
+    padding: 10px 0; flex: 1;
+  }
+  .name-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Inputs ── */
+  input[type="text"], select {
+    width: 100%; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-size: 15px; outline: none;
+    font-family: inherit; transition: border-color .2s;
+  }
+  input[type="text"]:focus, select:focus { border-color: var(--gold); }
+  input[type="text"]::placeholder { color: var(--muted); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: none; border-radius: 8px; padding: 10px 18px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: all .15s; white-space: nowrap;
+  }
+  .btn-primary {
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    color: #0f1117; width: 100%; padding: 14px; font-size: 16px;
+    border-radius: 10px; margin-top: 8px;
+  }
+  .btn-primary:active { opacity: .85; transform: scale(.98); }
+  .btn-secondary {
+    background: var(--surface2); color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:active { opacity: .7; }
+  .btn-danger { background: #2a1a1a; color: var(--danger); border: 1px solid #4a2a2a; }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+  /* ── Toggle (attending) ── */
+  .attend-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .attend-toggle.on { background: #1a2a1a; border-color: #2a5a2a; }
+  .toggle-label { font-size: 15px; font-weight: 600; }
+  .toggle-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .toggle-switch {
+    width: 52px; height: 28px; border-radius: 14px;
+    background: var(--border); cursor: pointer;
+    position: relative; transition: background .2s; border: none; flex-shrink: 0;
+  }
+  .toggle-switch.on { background: var(--green); }
+  .toggle-switch::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; transition: transform .2s;
+  }
+  .toggle-switch.on::after { transform: translateX(24px); }
+
+  /* ── Ranking List ── */
+  .rank-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    transition: transform .15s;
+  }
+  .rank-item.top3 { background: #1e1a0a; border-color: #c0980025; }
+  .rank-item:active { transform: scale(.98); }
+  .rank-medal { font-size: 24px; width: 32px; text-align: center; flex-shrink: 0; }
+  .rank-num { font-size: 13px; font-weight: 700; color: var(--muted); width: 32px; text-align: center; flex-shrink: 0; }
+  .rank-info { flex: 1; min-width: 0; }
+  .rank-name { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rank-item.top3 .rank-name { color: var(--gold); }
+  .rank-detail { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .rank-detail.penalized { color: var(--danger); }
+  .rank-score { font-size: 18px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+  .rank-item:not(.top3) .rank-score { font-size: 15px; color: var(--muted); }
+
+  /* ── 可點擊的排名項目（展開明細）── */
+  .rank-item-wrapper {
+    margin-bottom: 8px;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: background .15s;
+  }
+  .rank-item-wrapper.expanded {
+    background: var(--surface2);
+  }
+  .rank-item-wrapper.expanded .rank-item {
+    margin-bottom: 0;
+    background: transparent;
+    border-color: transparent;
+  }
+  .rank-item-wrapper .rank-item {
+    cursor: pointer; transition: background .15s;
+  }
+  .rank-item-wrapper .rank-item:active {
+    background: var(--surface2);
+  }
+  .rank-expand-icon {
+    font-size: 11px; color: var(--muted); margin-left: 6px;
+    transition: transform .2s;
+    display: inline-block;
+  }
+  .rank-item-wrapper.expanded .rank-expand-icon {
+    transform: rotate(180deg);
+  }
+
+  /* 展開明細區 */
+  .rank-detail-panel {
+    max-height: 0; overflow: hidden;
+    transition: max-height .25s ease;
+  }
+  .rank-item-wrapper.expanded .rank-detail-panel {
+    max-height: 600px;
+  }
+  .rank-detail-inner {
+    padding: 0 16px 14px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 0;
+  }
+  .breakdown-table {
+    width: 100%; font-size: 12px; border-collapse: collapse;
+    margin-bottom: 10px;
+  }
+  .breakdown-table th, .breakdown-table td {
+    padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown-table th {
+    color: var(--muted); font-weight: 600; font-size: 11px;
+    text-transform: uppercase;
+  }
+  .breakdown-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .breakdown-table tr.abstain td { color: var(--muted); font-style: italic; }
+  .breakdown-table tr.me td:first-child { color: var(--gold); font-weight: 600; }
+  .breakdown-table tr.me td:first-child::before { content: "→ "; }
+  .breakdown-formula {
+    background: #0a0c12; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px; color: var(--gold); text-align: center;
+  }
+
+  /* ── Participant chips ── */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--muted);
+  }
+  .chip.me { background: #1a1d0a; border-color: #4a5a10; color: #c0d040; }
+
+  /* ── Preference rows ── */
+  .pref-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .pref-row:last-child { border-bottom: none; }
+  .pref-name { flex: 1; font-size: 14px; }
+  .pref-select {
+    width: 110px; padding: 6px 10px; font-size: 13px;
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .pref-select.set { border-color: var(--gold); color: var(--gold); }
+
+  /* ── Add restaurant ── */
+  .add-row { display: flex; gap: 8px; margin-top: 8px; }
+  .add-row input { flex: 1; }
+
+  /* ── History ── */
+  .history-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-date { font-size: 12px; color: var(--muted); }
+  .history-rest { font-size: 14px; font-weight: 600; }
+  .history-days { font-size: 11px; color: var(--muted); }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center; padding: 48px 20px; color: var(--muted);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-text { font-size: 14px; line-height: 1.6; }
+
+  /* ── Loading ── */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 32px; color: var(--muted); font-size: 14px;
+  }
+  .spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--gold); border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #1e2130; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 20px; font-size: 14px; color: var(--text);
+    box-shadow: 0 8px 32px rgba(0,0,0,.4); transition: transform .3s ease; z-index: 999;
+    white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 12px; color: var(--muted); letter-spacing: 1px;
+    text-transform: uppercase; margin: 16px 0 8px;
+  }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+  /* ── Record bar (ranking page bottom) ── */
+  .record-bar {
+    position: sticky; bottom: 0; background: var(--bg);
+    border-top: 1px solid var(--border); padding: 12px 16px;
+  }
+  .record-row { display: flex; gap: 8px; }
+  .record-row select { flex: 1; }
+
+  /* ── How-it-works (modal) ── */
+  .info-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-family: inherit; padding: 0;
+    transition: all .15s;
+  }
+  .info-btn:active { transform: scale(.92); }
+  .info-btn:hover { color: var(--gold); border-color: var(--gold); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000;
+    display: none; align-items: flex-end; justify-content: center;
+    animation: fadeIn .2s ease;
+  }
+  .modal-overlay.show { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal {
+    background: var(--surface); border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0; width: 100%; max-width: 480px;
+    max-height: 85vh; overflow-y: auto;
+    animation: slideUp .25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  .modal-header {
+    position: sticky; top: 0; background: var(--surface);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .modal-title { font-size: 17px; font-weight: 700; color: var(--gold); }
+  .modal-close {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 22px; padding: 0 4px; line-height: 1;
+  }
+  .modal-body { padding: 20px; line-height: 1.65; }
+
+  /* 說明卡片內部元件 */
+  .rule-block {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; margin-bottom: 14px;
+  }
+  .rule-block-title {
+    font-size: 13px; font-weight: 700; color: var(--gold);
+    margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .rule-block-body { font-size: 13px; color: var(--text); }
+  .rule-block-body p { margin-bottom: 8px; }
+  .rule-block-body p:last-child { margin-bottom: 0; }
+
+  /* 範例表格 */
+  .example-table {
+    width: 100%; font-size: 12px; border-collapse: collapse;
+    margin: 8px 0;
+  }
+  .example-table th, .example-table td {
+    padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .example-table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .example-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .example-table .highlight { color: var(--gold); font-weight: 700; }
+
+  .formula {
+    background: #0a0c12; border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; margin: 8px 0;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px; color: var(--gold); text-align: center;
+  }
+
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--gold); color: var(--bg); font-size: 11px; font-weight: 700;
+  }
+
+  .feedback-note {
+    background: #1a1d0a; border: 1px solid #4a5a10;
+    border-radius: 8px; padding: 10px 12px; margin-top: 14px;
+    font-size: 12px; color: #c0d040; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="logo">🍱 午餐決策</div>
+      <div class="date-badge" id="dateBadge">載入中...</div>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('ranking')">
+      <span class="tab-icon">🏆</span>今日排名
+    </button>
+    <button class="tab-btn" onclick="switchTab('attend')">
+      <span class="tab-icon">✋</span>出席
+    </button>
+    <button class="tab-btn" onclick="switchTab('prefs')">
+      <span class="tab-icon">⭐</span>我的偏好
+    </button>
+    <button class="tab-btn" onclick="switchTab('history')">
+      <span class="tab-icon">📅</span>歷史
+    </button>
+  </div>
+
+  <!-- Pages -->
+  <div class="content">
+
+    <!-- ── 排名頁 ── -->
+    <div id="page-ranking" class="page active">
+      <div id="rankingContent">
+        <div class="loading"><div class="spinner"></div>計算中...</div>
+      </div>
+    </div>
+
+    <!-- ── 出席頁 ── -->
+    <div id="page-attend" class="page">
+      <div class="card name-section">
+        <div class="card-title">你是誰？</div>
+        <div id="nameDisplay" style="display:none">
+          <div class="name-display" id="nameLabel"></div>
+          <div class="name-hint">不是你？<span style="color:var(--gold);cursor:pointer" onclick="changeName()">點此更改</span></div>
+        </div>
+        <div id="nameInput">
+          <input type="text" id="nameField" placeholder="輸入你的名字..." maxlength="20">
+          <button class="btn btn-primary" onclick="confirmName()" style="margin-top:8px">確認</button>
+        </div>
+      </div>
+
+      <div id="attendCard" style="display:none">
+        <div class="card-title">今日出席狀態</div>
+        <div class="attend-toggle" id="attendToggle" onclick="toggleAttend()">
+          <div>
+            <div class="toggle-label" id="toggleLabel">我今天不去吃</div>
+            <div class="toggle-sub" id="toggleSub">點擊切換</div>
+          </div>
+          <button class="toggle-switch" id="toggleSwitch"></button>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="card-title">今天一起吃的人</div>
+          <div id="todayPeople" class="chips">
+            <span style="color:var(--muted);font-size:13px">載入中...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 偏好設定頁 ── -->
+    <div id="page-prefs" class="page">
+      <div id="prefsGate">
+        <div class="empty">
+          <div class="empty-icon">⭐</div>
+          <div class="empty-text">請先到「出席」頁輸入你的名字</div>
+        </div>
+      </div>
+      <div id="prefsContent" style="display:none">
+        <div class="card">
+          <div class="card-title">新增餐廳到候選清單</div>
+          <div class="add-row">
+            <input type="text" id="newRestInput" placeholder="餐廳名稱..." maxlength="30">
+            <button class="btn btn-secondary" onclick="addRestaurant()">新增</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">我的餐廳排名偏好</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:12px;color:var(--muted)">設定你最喜歡的前 10 名，未設定視為 0 分</div>
+            <button class="btn btn-sm" id="editModeBtn" onclick="toggleEditMode()"
+              style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-size:12px">
+              ✏️ 編輯
+            </button>
+          </div>
+          <div id="prefsList">
+            <div class="loading"><div class="spinner"></div>載入中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 歷史頁 ── -->
+    <div id="page-history" class="page">
+      <div class="card">
+        <div class="card-title">記錄今日午餐</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">選擇今天最終吃了什麼（或清除今日紀錄）</div>
+        <div class="add-row">
+          <select id="historyRestSelect" onchange="updateRecordButton()"></select>
+          <button class="btn btn-secondary" id="recordBtn" onclick="recordToday()">記錄</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">近期歷史（7天）</div>
+        <div id="historyList">
+          <div class="loading"><div class="spinner"></div>載入中...</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<!-- ── 演算法說明 Modal ── -->
+<div class="modal-overlay" id="howItWorksModal" onclick="closeHowItWorks(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">🧮 排名怎麼算出來的</div>
+      <button class="modal-close" onclick="closeHowItWorks()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">1</span> 哪些餐廳會出現</div>
+        <div class="rule-block-body">
+          <p>系統會自動把<strong style="color:var(--gold)">最近 5 個上班日</strong>內吃過的餐廳排除掉（週六日不計入）。</p>
+          <p>例如：今天週三，回看過去 5 個上班日，這段期間吃過的店都不會出現在排名裡。等過了 5 個上班日後，那家店才會回到候選清單。</p>
+          <p style="color:var(--muted);font-size:12px">→ 被排除的餐廳會列在排名最下方的「最近吃過」區塊裡，方便大家確認。</p>
+        </div>
+      </div>
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">2</span> 每個人的偏好怎麼變成分數</div>
+        <div class="rule-block-body">
+          <p>每個人到「我的偏好」頁面，把喜歡的餐廳排第 1～10 名。系統會把名次轉換成分數：</p>
+          <div class="formula">分數 = 11 − 名次</div>
+          <table class="example-table">
+            <tr><th>名次</th><th class="num">分數</th></tr>
+            <tr><td>第 1 名（最愛）</td><td class="num highlight">10 分</td></tr>
+            <tr><td>第 2 名</td><td class="num">9 分</td></tr>
+            <tr><td>第 5 名</td><td class="num">6 分</td></tr>
+            <tr><td>第 10 名</td><td class="num">1 分</td></tr>
+            <tr><td>沒設定（棄權）</td><td class="num">0 分</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">3</span> 一家餐廳的最終分數</div>
+        <div class="rule-block-body">
+          <p>把<strong style="color:var(--gold)">所有今日出席者</strong>對該餐廳的分數加總，除以總出席人數：</p>
+          <div class="formula">平均分 = 所有人的分數總和 ÷ 出席人數</div>
+          <p>沒設定偏好的人視為投 0 分（棄權），這樣可以避免「只有 1 個人喜歡的店」分數虛高。</p>
+        </div>
+      </div>
+
+      <div class="rule-block" style="background:#1a1d0a;border-color:#4a5a10">
+        <div class="rule-block-title" style="color:#c0d040">💡 舉個例子（3 人出席）</div>
+        <div class="rule-block-body">
+          <p style="font-size:12px;color:var(--muted)">看「中興眷村」這家店：</p>
+          <table class="example-table">
+            <tr><th>出席者</th><th>排第幾</th><th class="num">分數</th></tr>
+            <tr><td>Webb</td><td>第 1 名</td><td class="num">10</td></tr>
+            <tr><td>Nicky</td><td>第 2 名</td><td class="num">9</td></tr>
+            <tr><td>wilson</td><td>沒設定</td><td class="num">0</td></tr>
+          </table>
+          <div class="formula">(10 + 9 + 0) ÷ 3 = 6.33 分</div>
+          <p style="font-size:12px;color:var(--muted)">→ 若有第 4 個人但沒設偏好，分數會被稀釋成 (10+9+0+0)÷4 = 4.75，店家排名會往後掉。</p>
+        </div>
+      </div>
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">4</span> 排名規則總結</div>
+        <div class="rule-block-body">
+          <p>📊 <strong>平均分高的排前面</strong>。</p>
+          <p>🤝 <strong>同分時，有設偏好的人數多的優先</strong>（共識度高）。</p>
+          <p>✅ 至少要有 1 個人對這家餐廳設過偏好，才會列入排名。</p>
+        </div>
+      </div>
+
+      <div class="feedback-note">
+        💬 對演算法有想法？覺得計分方式可以調整？歡迎在團隊裡討論，這個系統就是希望讓大家一起決定怎麼選午餐 🍱
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// 設定：請填入你的 Apps Script 部署網址
+// ══════════════════════════════════════════════
+const API_URL = 'https://script.google.com/macros/s/AKfycbyFnRNN15cetTWLMPKsLNwxaQ7PtnCWlRCTq1t4L1Ny0bxm1tCVf2R3Y1r17v7tBJA9/exec';
+
+// ══════════════════════════════════════════════
+// 狀態
+// ══════════════════════════════════════════════
+let myName = localStorage.getItem('lunchName') || '';
+let attending = false;
+let restaurants = [];
+let myPrefs = {};
+let rankingData = null;
+let currentTab = 'ranking';
+let editMode = false;
+
+// ══════════════════════════════════════════════
+// API 工具
+// ══════════════════════════════════════════════
+async function apiGet(params) {
+  const url = new URL(API_URL);
+  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), { redirect: 'follow' });
+  return res.json();
+}
+
+async function apiPost(body) {
+  // 用 text/plain 避免 CORS preflight (OPTIONS)，Apps Script 不支援 OPTIONS
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+    redirect: 'follow'
+  });
+  return res.json();
+}
+
+// ══════════════════════════════════════════════
+// Toast
+// ══════════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 2500);
+}
+
+// ══════════════════════════════════════════════
+// 初始化
+// ══════════════════════════════════════════════
+const WEEKDAYS = ['日','一','二','三','四','五','六'];
+function initDateBadge() {
+  const now = new Date();
+  const day = WEEKDAYS[now.getDay()];
+  document.getElementById('dateBadge').textContent =
+    `${now.getMonth()+1}/${now.getDate()} 週${day}`;
+}
+
+async function init() {
+  initDateBadge();
+  await loadRestaurants();
+  loadRanking();
+  if (myName) showNameDisplay();
+}
+
+// ══════════════════════════════════════════════
+// Tab 切換
+// ══════════════════════════════════════════════
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['ranking','attend','prefs','history'][i] === tab);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+
+  if (tab === 'ranking') loadRanking();
+  else if (tab === 'attend') loadAttendPage();
+  else if (tab === 'prefs') loadPrefsPage();
+  else if (tab === 'history') loadHistoryPage();
+}
+
+// ══════════════════════════════════════════════
+// 排名頁
+// ══════════════════════════════════════════════
+async function loadRanking() {
+  const el = document.getElementById('rankingContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>計算中...</div>';
+  try {
+    const data = await apiGet({ action: 'getRanking' });
+    rankingData = data;
+    renderRanking(data);
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">無法連線，請確認網址設定</div></div>';
+  }
+}
+
+function renderRanking(data) {
+  const el = document.getElementById('rankingContent');
+
+  if (!data.ranking || data.ranking.length === 0) {
+    el.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🍽️</div>
+        <div class="empty-text">${data.message || '今天還沒有人加入午餐'}<br><br>到「出席」頁開啟今日出席</div>
+      </div>`;
+    return;
+  }
+
+  const medals = ['🥇','🥈','🥉'];
+  const participantChips = data.participants.map(p =>
+    `<span class="chip ${p === myName ? 'me' : ''}">${p}${p === myName ? ' (我)' : ''}</span>`
+  ).join('');
+
+  const n = data.participants.length;
+  const items = data.ranking.map((r, i) => {
+    const isTop3 = i < 3;
+    const coverageText = r.prefCount === n
+      ? `${n} 人都有設偏好`
+      : `${r.prefCount}/${n} 人有設偏好`;
+
+    // 計算明細表
+    const breakdownRows = (r.breakdown || []).map(b => {
+      const isAbstain = b.rank === null;
+      const isMe = b.person === myName;
+      const cls = (isAbstain ? 'abstain' : '') + (isMe ? ' me' : '');
+      const rankText = isAbstain ? '未設定' : `第 ${b.rank} 名`;
+      const scoreText = isAbstain ? '0 (棄權)' : b.score;
+      return `<tr class="${cls.trim()}">
+        <td>${b.person}${isMe ? ' (我)' : ''}</td>
+        <td>${rankText}</td>
+        <td class="num">${scoreText}</td>
+      </tr>`;
+    }).join('');
+
+    const total = r.total != null ? r.total : 0;
+    const formulaText = `(${(r.breakdown || []).map(b => b.score).join(' + ')}) ÷ ${n} = ${r.avgScore}`;
+
+    return `
+      <div class="rank-item-wrapper" id="rank-wrap-${i}">
+        <div class="rank-item ${isTop3 ? 'top3' : ''}" onclick="toggleRankDetail(${i})">
+          <div class="${isTop3 ? 'rank-medal' : 'rank-num'}">${isTop3 ? medals[i] : '#'+(i+1)}</div>
+          <div class="rank-info">
+            <div class="rank-name">${r.restaurant}<span class="rank-expand-icon">▾</span></div>
+            <div class="rank-detail">平均 ${r.avgScore} 分 · ${coverageText}</div>
+          </div>
+          <div class="rank-score">${r.finalScore}</div>
+        </div>
+        <div class="rank-detail-panel">
+          <div class="rank-detail-inner">
+            <table class="breakdown-table">
+              <tr><th>出席者</th><th>排名</th><th class="num">分數</th></tr>
+              ${breakdownRows}
+              <tr style="font-weight:700">
+                <td colspan="2">總和</td>
+                <td class="num">${total}</td>
+              </tr>
+            </table>
+            <div class="breakdown-formula">${formulaText}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // 被「五個上班日不重複」規則排除的店
+  const excludedSection = (data.excluded && data.excluded.length > 0)
+    ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+         <div class="card-title" style="margin-bottom:6px">最近 5 個上班日已吃過（不列入）</div>
+         <div class="chips">${data.excluded.map(r => `<span class="chip">${r}</span>`).join('')}</div>
+       </div>`
+    : '';
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="card-title" style="margin:0">今日參與（${data.participants.length} 人）</div>
+      <button class="info-btn" onclick="openHowItWorks()" title="排名怎麼算？">ℹ</button>
+    </div>
+    <div class="chips" style="margin-bottom:16px">${participantChips}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">💡 點任一餐廳可展開分數明細</div>
+    ${items}
+    ${excludedSection}
+    <div style="height:8px"></div>
+  `;
+}
+
+// 展開/收合排名明細（手風琴效果：同時只展開一個）
+function toggleRankDetail(idx) {
+  const target = document.getElementById('rank-wrap-' + idx);
+  if (!target) return;
+  const isOpen = target.classList.contains('expanded');
+  // 先收合所有其他
+  document.querySelectorAll('.rank-item-wrapper.expanded').forEach(el => {
+    if (el !== target) el.classList.remove('expanded');
+  });
+  // 切換目標
+  target.classList.toggle('expanded', !isOpen);
+}
+
+// ══════════════════════════════════════════════
+// 演算法說明 modal
+// ══════════════════════════════════════════════
+function openHowItWorks() {
+  document.getElementById('howItWorksModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeHowItWorks(e) {
+  // 點 overlay（外層）或關閉按鈕才關，點 modal 內部不關
+  if (e && e.target.id !== 'howItWorksModal' && e.currentTarget !== e.target) return;
+  document.getElementById('howItWorksModal').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+// ══════════════════════════════════════════════
+// 出席頁
+// ══════════════════════════════════════════════
+let attendanceLoaded = false;
+
+async function loadAttendPage() {
+  if (myName) {
+    showNameDisplay();
+    // 只有第一次進來才從伺服器讀，之後切頁不重置
+    if (!attendanceLoaded) {
+      await refreshAttendance();
+      attendanceLoaded = true;
+    } else {
+      // 只刷新今天一起吃的人名單，不重置自己的出席狀態
+      await refreshPeopleList();
+    }
+  }
+}
+
+function showNameDisplay() {
+  document.getElementById('nameInput').style.display = 'none';
+  document.getElementById('nameDisplay').style.display = 'block';
+  document.getElementById('nameLabel').textContent = myName;
+  document.getElementById('attendCard').style.display = 'block';
+  if (document.getElementById('page-prefs').classList.contains('active') ||
+      document.getElementById('prefsContent')) {
+    showPrefsContent();
+  }
+}
+
+async function confirmName() {
+  const name = document.getElementById('nameField').value.trim();
+  if (!name) return showToast('請輸入名字', 'error');
+  myName = name;
+  localStorage.setItem('lunchName', name);
+  showNameDisplay();
+  await refreshAttendance();
+}
+
+function changeName() {
+  myName = '';
+  localStorage.removeItem('lunchName');
+  attendanceLoaded = false;
+  attending = false;
+  document.getElementById('nameDisplay').style.display = 'none';
+  document.getElementById('nameInput').style.display = 'block';
+  document.getElementById('attendCard').style.display = 'none';
+  document.getElementById('nameField').value = '';
+}
+
+async function refreshAttendance() {
+  try {
+    const data = await apiGet({ action: 'getAttendance' });
+    attending = data[myName] || false;
+    updateToggleUI();
+    updatePeopleList(data);
+  } catch(e) {
+    showToast('無法載入出席狀態', 'error');
+  }
+}
+
+async function refreshPeopleList() {
+  try {
+    const data = await apiGet({ action: 'getAttendance' });
+    updatePeopleList(data);
+  } catch(e) {}
+}
+
+function updatePeopleList(data) {
+  const peopleEl = document.getElementById('todayPeople');
+  const attendees = Object.keys(data).filter(p => data[p]);
+  if (attendees.length === 0) {
+    peopleEl.innerHTML = '<span style="color:var(--muted);font-size:13px">還沒有人加入</span>';
+  } else {
+    peopleEl.innerHTML = attendees.map(p =>
+      `<span class="chip ${p === myName ? 'me' : ''}">${p}</span>`
+    ).join('');
+  }
+}
+
+function updateToggleUI() {
+  const toggle = document.getElementById('attendToggle');
+  const sw = document.getElementById('toggleSwitch');
+  const label = document.getElementById('toggleLabel');
+  const sub = document.getElementById('toggleSub');
+  toggle.classList.toggle('on', attending);
+  sw.classList.toggle('on', attending);
+  label.textContent = attending ? '✅ 我今天要去吃午餐' : '我今天不去吃';
+  sub.textContent = attending ? '點擊取消出席' : '點擊加入今日午餐';
+}
+
+async function toggleAttend() {
+  if (!myName) return showToast('請先輸入名字', 'error');
+  attending = !attending;
+  updateToggleUI();
+  try {
+    await apiPost({ action: 'setAttendance', person: myName, attending });
+    showToast(attending ? '已加入今日午餐 🎉' : '已取消出席', attending ? 'success' : '');
+    await refreshPeopleList();
+    loadRanking(); // 背景更新排名
+  } catch(e) {
+    attending = !attending;
+    updateToggleUI();
+    showToast('更新失敗，請重試', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+// 偏好設定頁
+// ══════════════════════════════════════════════
+async function loadPrefsPage() {
+  if (!myName) {
+    document.getElementById('prefsGate').style.display = 'block';
+    document.getElementById('prefsContent').style.display = 'none';
+    return;
+  }
+  showPrefsContent();
+}
+
+async function showPrefsContent() {
+  document.getElementById('prefsGate').style.display = 'none';
+  document.getElementById('prefsContent').style.display = 'block';
+  await loadMyPrefs();
+}
+
+async function loadRestaurants() {
+  try {
+    restaurants = await apiGet({ action: 'getRestaurants' });
+    // select 的內容由 rebuildHistorySelect 統一管理（會根據今日紀錄狀態決定）
+    // 初始化先給「沒紀錄」狀態；之後 loadHistoryPage 會再呼叫一次更新
+    rebuildHistorySelect(null);
+  } catch(e) {}
+}
+
+// 根據 select 當前值更新按鈕文字與樣式
+function updateRecordButton() {
+  const sel = document.getElementById('historyRestSelect');
+  const btn = document.getElementById('recordBtn');
+  if (!sel || !btn) return;
+  const val = sel.value;
+  if (val === '__clear__') {
+    btn.textContent = '清除';
+    btn.classList.remove('btn-secondary');
+    btn.classList.add('btn-danger');
+  } else {
+    btn.textContent = '記錄';
+    btn.classList.remove('btn-danger');
+    btn.classList.add('btn-secondary');
+  }
+}
+
+async function loadMyPrefs() {
+  const el = document.getElementById('prefsList');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
+  try {
+    myPrefs = await apiGet({ action: 'getPreferences', person: myName });
+    renderPrefsList();
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
+  }
+}
+
+function toggleEditMode() {
+  editMode = !editMode;
+  const btn = document.getElementById('editModeBtn');
+  if (editMode) {
+    btn.textContent = '✅ 完成';
+    btn.style.color = 'var(--green)';
+    btn.style.borderColor = 'var(--green)';
+  } else {
+    btn.textContent = '✏️ 編輯';
+    btn.style.color = 'var(--muted)';
+    btn.style.borderColor = 'var(--border)';
+  }
+  // 顯示或隱藏所有刪除按鈕
+  document.querySelectorAll('.del-btn').forEach(el => {
+    el.style.display = editMode ? 'inline-flex' : 'none';
+  });
+}
+
+function renderPrefsList() {
+  const el = document.getElementById('prefsList');
+  el.innerHTML = restaurants.map(rest => {
+    const currentRank = myPrefs[rest] || 0;
+    const safeRest = rest.replace(/'/g, "\\'");
+    const options = ['<option value="0">未設定</option>',
+      ...Array.from({length:10}, (_,i) => i+1).map(r =>
+        `<option value="${r}" ${currentRank === r ? 'selected' : ''}>第 ${r} 名</option>`)
+    ].join('');
+    return `
+      <div class="pref-row" id="row-${encodeURIComponent(rest)}">
+        <div class="pref-name">${rest}</div>
+        <select class="pref-select ${currentRank > 0 ? 'set' : ''}"
+          onchange="savePref('${safeRest}', this)">
+          ${options}
+        </select>
+        <button class="btn btn-danger btn-sm del-btn"
+          style="display:${editMode ? 'inline-flex' : 'none'}"
+          onclick="deleteRestaurant('${safeRest}')">🗑️</button>
+      </div>`;
+  }).join('');
+}
+
+async function deleteRestaurant(name) {
+  const confirmed = confirm(`確定要從候選清單刪除「${name}」嗎？\n所有人對此餐廳的偏好設定不受影響。`);
+  if (!confirmed) return;
+  try {
+    const res = await apiPost({ action: 'deleteRestaurant', name });
+    if (res.success) {
+      showToast(`已刪除「${name}」`, 'success');
+      await loadRestaurants();
+      await loadMyPrefs();
+    } else {
+      showToast(res.error || '刪除失敗', 'error');
+    }
+  } catch(e) {
+    showToast('刪除失敗', 'error');
+  }
+}
+
+async function savePref(restaurant, selectEl) {
+  const rank = parseInt(selectEl.value);
+  selectEl.classList.toggle('set', rank > 0);
+  myPrefs[restaurant] = rank;
+  try {
+    await apiPost({ action: 'savePreference', person: myName, restaurant, rank });
+    showToast('已儲存', 'success');
+  } catch(e) {
+    showToast('儲存失敗', 'error');
+  }
+}
+
+async function addRestaurant() {
+  const input = document.getElementById('newRestInput');
+  const name = input.value.trim();
+  if (!name) return showToast('請輸入餐廳名稱', 'error');
+  try {
+    const res = await apiPost({ action: 'addRestaurant', name });
+    if (res.success) {
+      input.value = '';
+      showToast(`已新增「${name}」🎉`, 'success');
+      await loadRestaurants();
+      renderPrefsList();
+    } else {
+      showToast(res.error || '新增失敗', 'error');
+    }
+  } catch(e) {
+    showToast('新增失敗', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+// 歷史頁
+// ══════════════════════════════════════════════
+async function loadHistoryPage() {
+  const el = document.getElementById('historyList');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
+  try {
+    const history = await apiGet({ action: 'getHistory' });
+    const DAYS = ['日','一','二','三','四','五','六'];
+    const items = [];
+    let todayRecord = null;
+    for (let d = 0; d < 7; d++) {
+      const dt = new Date();
+      dt.setDate(dt.getDate() - d);
+      // 用本地時區算日期，與後端 todayStr() (Asia/Taipei) 一致
+      const ds = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      const rest = history[ds];
+      if (d === 0) todayRecord = rest || null;
+      const label = d === 0 ? '今天' : d === 1 ? '昨天' : `${d} 天前`;
+      const dayName = `週${DAYS[dt.getDay()]}`;
+      items.push(`
+        <div class="history-item">
+          <div>
+            <div class="history-date">${ds} ${dayName}</div>
+            <div class="history-rest">${rest || '—'}</div>
+          </div>
+          <div class="history-days">${label}</div>
+        </div>`);
+    }
+    el.innerHTML = items.join('') || '<div style="color:var(--muted);padding:12px">無記錄</div>';
+    // 根據今天是否已有紀錄，重建記錄 select 的選項
+    rebuildHistorySelect(todayRecord);
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
+  }
+}
+
+// 根據今天是否已有紀錄，決定 select 要顯示哪些選項
+// - 沒紀錄：顯示「請選擇」+ 餐廳清單
+// - 有紀錄：placeholder 改成顯示當前紀錄，並多一個「清除」選項
+function rebuildHistorySelect(todayRecord) {
+  const sel = document.getElementById('historyRestSelect');
+  if (!sel || !restaurants) return;
+  const placeholder = todayRecord
+    ? `<option value="" disabled selected>今天已記錄：${todayRecord}（可重選覆蓋）</option>`
+    : `<option value="" disabled selected>— 請選擇 —</option>`;
+  const clearOption = todayRecord
+    ? '<option value="__clear__">🗑️ 清除今日紀錄</option>'
+    : '';
+  const opts = restaurants.map(r => `<option value="${r}">${r}</option>`).join('');
+  sel.innerHTML = placeholder + clearOption + opts;
+  updateRecordButton();
+}
+
+async function recordToday() {
+  const restaurant = document.getElementById('historyRestSelect').value;
+  if (!restaurant) return showToast('請選擇餐廳', 'error');
+
+  // 清除情境：加二次確認避免誤觸
+  if (restaurant === '__clear__') {
+    if (!confirm('確定要清除今天的午餐紀錄嗎？\n清除後排名會重新把今天「曾經吃過」的餐廳列入候選。')) {
+      return;
+    }
+    try {
+      await apiPost({ action: 'recordHistory', restaurant: '__clear__' });
+      showToast('已清除今日紀錄 🗑️', 'success');
+      // 把 select 重置回 placeholder
+      const sel = document.getElementById('historyRestSelect');
+      sel.value = '';
+      updateRecordButton();
+      loadHistoryPage();
+    } catch(e) {
+      showToast('清除失敗', 'error');
+    }
+    return;
+  }
+
+  // 一般記錄情境
+  try {
+    await apiPost({ action: 'recordHistory', restaurant });
+    showToast(`已記錄：${restaurant} ✅`, 'success');
+    loadHistoryPage();
+  } catch(e) {
+    showToast('記錄失敗', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+// 啟動
+// ══════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
