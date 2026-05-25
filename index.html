@@ -375,7 +375,7 @@
 // ══════════════════════════════════════════════
 // 設定：請填入你的 Apps Script 部署網址
 // ══════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbyFnRNN15cetTWLMPKsLNwxaQ7PtnCWlRCTq1t4L1Ny0bxm1tCVf2R3Y1r17v7tBJA9/exec';
+const API_URL = 'YOUR_APPS_SCRIPT_URL_HERE';
 
 // ══════════════════════════════════════════════
 // 狀態
@@ -485,15 +485,21 @@ function renderRanking(data) {
   const items = data.ranking.map((r, i) => {
     const isTop3 = i < 3;
     const penaltyText = r.penalty < 1
-      ? `${r.penaltyDays === 0 ? '今天' : r.penaltyDays + '天前'}吃過 · 懲罰 ${Math.round(r.penalty*100)}%`
+      ? `${r.penaltyDays === 0 ? '今天' : r.penaltyDays + '個工作日前'}吃過 · 封鎖中`
       : '';
     return `
-      <div class="rank-item ${isTop3 ? 'top3' : ''}">
+      <div class="rank-item ${isTop3 ? 'top3' : ''}" onclick="toggleDetail(this)">
         <div class="${isTop3 ? 'rank-medal' : 'rank-num'}">${isTop3 ? medals[i] : '#'+(i+1)}</div>
         <div class="rank-info">
           <div class="rank-name">${r.restaurant}</div>
           <div class="rank-detail ${r.penalty < 1 ? 'penalized' : ''}">
             ${r.penalty < 1 ? '⚠️ ' + penaltyText : `平均 ${r.avgScore} 分`}
+          </div>
+          <div class="rank-expand" style="display:none; margin-top:6px; font-size:11px; color:var(--muted); line-height:1.8;">
+            平均分：${r.avgScore}<br>
+            懲罰係數：${Math.round(r.penalty * 100)}%<br>
+            最終分數：${r.finalScore}<br>
+            ${r.penaltyDays >= 0 ? `距上次：${r.penaltyDays} 個工作日前` : '近期未吃過'}
           </div>
         </div>
         <div class="rank-score">${r.finalScore}</div>
@@ -506,6 +512,19 @@ function renderRanking(data) {
     ${items}
     <div style="height:8px"></div>
   `;
+}
+
+function toggleDetail(el) {
+  const detail = el.querySelector('.rank-expand');
+  if (!detail) return;
+  const isOpen = detail.style.display !== 'none';
+  // 關閉所有已展開的
+  document.querySelectorAll('.rank-expand').forEach(d => d.style.display = 'none');
+  document.querySelectorAll('.rank-item').forEach(d => d.style.background = '');
+  if (!isOpen) {
+    detail.style.display = 'block';
+    el.style.background = el.classList.contains('top3') ? '#2a220a' : '#252840';
+  }
 }
 
 // ══════════════════════════════════════════════
