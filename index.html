@@ -359,6 +359,19 @@
   .save-indicator.saved { color: var(--green); }
   .save-indicator.error { color: var(--danger); }
 
+  /* 偏好鎖定提示 */
+  .pref-lock-banner {
+    background: #2a1a1a; border: 1px solid #4a2a2a;
+    color: #d08080;
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 13px; margin-bottom: 10px;
+    text-align: center;
+  }
+  #prefsList.locked .pref-row {
+    cursor: not-allowed; opacity: .65;
+  }
+  #prefsList.locked .pref-handle { opacity: .3; }
+
   /* ── Add restaurant ── */
   .add-row { display: flex; gap: 8px; margin-top: 8px; }
   .add-row input { flex: 1; }
@@ -648,6 +661,7 @@
           <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
             長按並拖曳調整順序 · 第 1 名最喜歡 · 越下面越普通
           </div>
+          <div id="prefLockBanner" class="pref-lock-banner" style="display:none"></div>
           <div id="prefsList">
             <div class="loading"><div class="spinner"></div>載入中...</div>
           </div>
@@ -749,6 +763,7 @@
           <p>📊 <strong>平均分高的排前面</strong>。</p>
           <p>🍱 <strong>7 個上班日內吃過的店一律不顯示</strong>（硬性過濾）。</p>
           <p>✅ <strong>所有出席者都必須拖曳完成個人排名</strong>，缺一不可。</p>
+          <p>🔒 <strong>每日 12:00 後個人偏好鎖定</strong>，避免影響當日決策的公平性。但若已在「歷史」頁記錄今日午餐，會自動解鎖讓你可以開始調整明天的偏好。隔天 0:00 也會自動解鎖。</p>
         </div>
       </div>
 
@@ -796,6 +811,7 @@ let myPrefs = {};
 let orderedPrefs = []; // 使用者偏好的「排序陣列」，index 0 = 第 1 名
 let commentsCache = {}; // { 餐廳名: [{person, comment, updated_at}, ...] }
 let todayLockedRest = null; // 今天已記錄的餐廳名（有值代表進入鎖定狀態）
+let prefLockStatus = { locked: false, cutoffHour: 12, cutoffMin: 0 }; // 個人偏好鎖定狀態
 let rankingData = null;
 let currentTab = 'ranking';
 
@@ -865,6 +881,10 @@ function switchTab(tab) {
   else if (tab === 'attend') loadAttendPage();
   else if (tab === 'prefs') loadPrefsPage();
   else if (tab === 'history') loadHistoryPage();
+
+  // 只在偏好頁停留時啟動鎖定檢查 timer
+  if (tab === 'prefs') startPrefLockTimer();
+  else stopPrefLockTimer();
 }
 
 // ══════════════════════════════════════════════
@@ -1386,18 +1406,69 @@ async function loadMyPrefs() {
   const el = document.getElementById('prefsList');
   el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
   try {
-    const [prefs, comments] = await Promise.all([
+    const [prefs, comments, lockStatus] = await Promise.all([
       apiGet({ action: 'getPreferences', person: myName }),
-      apiGet({ action: 'getComments' }).catch(() => ({}))
+      apiGet({ action: 'getComments' }).catch(() => ({})),
+      apiGet({ action: 'getPrefLockStatus' }).catch(() => ({ locked: false, cutoffHour: 12, cutoffMin: 0 }))
     ]);
     myPrefs = prefs;
     commentsCache = comments || {};
+    prefLockStatus = lockStatus || { locked: false, cutoffHour: 12, cutoffMin: 0 };
     // 把 myPrefs (對象 {rest: rank}) 轉成排序後的陣列
     rebuildOrderedList();
     renderPrefsList();
     initSortable();
+    applyPrefLockUI();
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
+  }
+}
+
+// 根據 prefLockStatus 套用鎖定 UI（禁用拖曳、顯示提示）
+function applyPrefLockUI() {
+  const banner = document.getElementById('prefLockBanner');
+  const list = document.getElementById('prefsList');
+  if (!banner || !list) return;
+  const cutoffStr = `${String(prefLockStatus.cutoffHour).padStart(2,'0')}:${String(prefLockStatus.cutoffMin).padStart(2,'0')}`;
+
+  // 鎖定狀態以伺服器為準。瀏覽器時間僅用於「樂觀預測」：
+  // 如果伺服器說沒鎖、但瀏覽器時間已過 cutoff 且今日尚未記錄 → 也鎖起來。
+  // 這避免使用者停在頁面上跨過 12:00 還能拖。
+  const browserNow = new Date();
+  const browserHour = browserNow.getHours();
+  const browserMin = browserNow.getMinutes();
+  const browserPastCutoff = (browserHour > prefLockStatus.cutoffHour) ||
+    (browserHour === prefLockStatus.cutoffHour && browserMin >= prefLockStatus.cutoffMin);
+  // 注意：如果今日已記錄，不管時間都不該鎖
+  const shouldLock = prefLockStatus.locked ||
+    (browserPastCutoff && !prefLockStatus.todayLogged);
+
+  if (shouldLock) {
+    banner.style.display = 'block';
+    banner.innerHTML = `🔒 已過 ${cutoffStr} — 今日偏好已鎖定，明天再來調整`;
+    list.classList.add('locked');
+    if (sortableInstance) {
+      sortableInstance.option('disabled', true);
+    }
+  } else {
+    banner.style.display = 'none';
+    list.classList.remove('locked');
+    if (sortableInstance) {
+      sortableInstance.option('disabled', false);
+    }
+  }
+}
+
+// 在偏好頁停留時，每分鐘檢查一次是否該鎖定（防止使用者剛好停在 11:59 不刷新）
+let prefLockCheckTimer = null;
+function startPrefLockTimer() {
+  stopPrefLockTimer();
+  prefLockCheckTimer = setInterval(applyPrefLockUI, 30000); // 每 30 秒檢查一次
+}
+function stopPrefLockTimer() {
+  if (prefLockCheckTimer) {
+    clearInterval(prefLockCheckTimer);
+    prefLockCheckTimer = null;
   }
 }
 
@@ -1508,6 +1579,14 @@ function debouncedSavePrefs() {
 }
 
 async function actuallySavePrefs() {
+  // 前端先擋一道
+  if (prefLockStatus.locked) {
+    setSaveIndicator('error');
+    showToast(`已過 ${prefLockStatus.cutoffHour}:00，偏好已鎖定`, 'error');
+    // 重新載入回原本狀態
+    loadMyPrefs();
+    return;
+  }
   try {
     const res = await apiPost({
       action: 'savePreferences',
@@ -1518,7 +1597,13 @@ async function actuallySavePrefs() {
       setSaveIndicator('saved');
       setTimeout(() => setSaveIndicator(''), 2000);
     } else {
+      // 後端拒絕（可能是剛好過了 12:00）
       setSaveIndicator('error');
+      if (res.error) showToast(res.error, 'error');
+      // 同步鎖定狀態並還原拖曳結果
+      prefLockStatus.locked = true;
+      applyPrefLockUI();
+      loadMyPrefs(); // 重撈原本順序
     }
   } catch(e) {
     setSaveIndicator('error');
@@ -1695,8 +1780,9 @@ async function recordToday() {
       const sel = document.getElementById('historyRestSelect');
       sel.value = '';
       updateRecordButton();
-      // 重新整理所有相關頁面（解除鎖定）
+      // 重新整理所有相關頁面（解除午餐鎖定、可能重啟偏好鎖定）
       todayLockedRest = null;
+      await refreshPrefLockStatus();
       await loadHistoryPage();
       loadRanking();        // 背景更新排名
       refreshPeopleList();  // 背景更新出席頁
@@ -1710,14 +1796,26 @@ async function recordToday() {
   try {
     await apiPost({ action: 'recordHistory', restaurant });
     showToast(`已記錄：${restaurant} ✅`, 'success');
-    // 進入鎖定狀態，更新相關頁面
+    // 進入午餐鎖定狀態 + 解除偏好鎖定
     todayLockedRest = restaurant;
+    await refreshPrefLockStatus();
     await loadHistoryPage();
     loadRanking();        // 背景更新排名（會切換到鎖定畫面）
     refreshPeopleList();  // 背景更新出席頁（會切換到鎖定畫面）
   } catch(e) {
     showToast('記錄失敗', 'error');
   }
+}
+
+// 重新撈伺服器的偏好鎖定狀態並套用 UI
+async function refreshPrefLockStatus() {
+  try {
+    const status = await apiGet({ action: 'getPrefLockStatus' });
+    if (status) {
+      prefLockStatus = status;
+      applyPrefLockUI();
+    }
+  } catch(e) {}
 }
 
 // ══════════════════════════════════════════════
