@@ -350,14 +350,40 @@
     padding: 4px 6px;
   }
 
-  /* 儲存狀態指示 */
-  .save-indicator {
-    font-size: 11px; color: var(--muted);
-    display: inline-flex; align-items: center; gap: 4px;
+  /* 儲存按鈕（取代原本的儲存指示器） */
+  #prefsSaveBtn {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .15s;
+    min-width: 70px;
   }
-  .save-indicator.saving { color: #c0a050; }
-  .save-indicator.saved { color: var(--green); }
-  .save-indicator.error { color: var(--danger); }
+  #prefsSaveBtn.dirty {
+    background: var(--gold);
+    color: var(--bg);
+    border-color: var(--gold);
+    font-weight: 600;
+    cursor: pointer;
+    animation: pulse-btn 1.5s ease-in-out infinite;
+  }
+  #prefsSaveBtn.saving {
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: wait;
+    animation: none;
+  }
+  #prefsSaveBtn:disabled {
+    cursor: not-allowed;
+    opacity: .8;
+    animation: none;
+  }
+  @keyframes pulse-btn {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(212, 165, 60, .4); }
+    50% { box-shadow: 0 0 0 6px rgba(212, 165, 60, 0); }
+  }
+  #prefsHint.dirty { color: var(--gold); }
 
   /* 偏好鎖定提示 */
   .pref-lock-banner {
@@ -654,12 +680,15 @@
         </div>
 
         <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px">
             <div class="card-title" style="margin:0">我的餐廳排名</div>
-            <span class="save-indicator" id="saveIndicator"></span>
+            <button class="btn btn-sm" id="prefsSaveBtn" onclick="savePrefsNow()"
+              disabled style="font-size:12px;padding:6px 14px">
+              <span id="prefsSaveBtnText">已儲存</span>
+            </button>
           </div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
-            長按並拖曳調整順序 · 第 1 名最喜歡 · 越下面越普通
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px" id="prefsHint">
+            長按並拖曳調整順序 · 拖完記得按「儲存」
           </div>
           <div id="prefLockBanner" class="pref-lock-banner" style="display:none"></div>
           <div id="prefsList">
@@ -812,6 +841,7 @@ let orderedPrefs = []; // 使用者偏好的「排序陣列」，index 0 = 第 1
 let commentsCache = {}; // { 餐廳名: [{person, comment, updated_at}, ...] }
 let todayLockedRest = null; // 今天已記錄的餐廳名（有值代表進入鎖定狀態）
 let prefLockStatus = { locked: false, cutoffHour: 12, cutoffMin: 0 }; // 個人偏好鎖定狀態
+let prefsDirty = false; // 偏好排序是否有未儲存變更
 let rankingData = null;
 let currentTab = 'ranking';
 
@@ -870,6 +900,10 @@ async function init() {
 // Tab 切換
 // ══════════════════════════════════════════════
 function switchTab(tab) {
+  // 離開偏好頁前，若有未儲存的變更，提示使用者
+  if (currentTab === 'prefs' && tab !== 'prefs' && prefsDirty && !prefLockStatus.locked) {
+    showToast('⚠️ 你有未儲存的偏好變更', 'error');
+  }
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
     b.classList.toggle('active', ['ranking','attend','prefs','history'][i] === tab);
@@ -1419,6 +1453,7 @@ async function loadMyPrefs() {
     renderPrefsList();
     initSortable();
     applyPrefLockUI();
+    markPrefsClean(); // 載入完成 = 乾淨狀態
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
   }
@@ -1450,6 +1485,8 @@ function applyPrefLockUI() {
     if (sortableInstance) {
       sortableInstance.option('disabled', true);
     }
+    // 同步寫回讓 updateSaveButton 知道現在是鎖定狀態
+    prefLockStatus.locked = true;
   } else {
     banner.style.display = 'none';
     list.classList.remove('locked');
@@ -1457,6 +1494,7 @@ function applyPrefLockUI() {
       sortableInstance.option('disabled', false);
     }
   }
+  updateSaveButton(); // 鎖定狀態變更時更新儲存按鈕顯示
 }
 
 // 在偏好頁停留時，每分鐘檢查一次是否該鎖定（防止使用者剛好停在 11:59 不刷新）
@@ -1551,42 +1589,86 @@ function initSortable() {
       // 同步更新 myPrefs（給其他地方用）
       myPrefs = {};
       orderedPrefs.forEach((r, i) => { myPrefs[r] = i + 1; });
-      // 重新渲染以更新名次數字
-      renderPrefsList();
-      // 觸發 debounced 儲存
-      debouncedSavePrefs();
+      // 只更新名次數字和 top3/top10 樣式，不重建整個清單（更順暢）
+      updateRankNumbersInPlace();
+      // 標記為有未儲存變更
+      markPrefsDirty();
     }
   });
 }
 
-// 儲存狀態指示
-function setSaveIndicator(state) {
-  const el = document.getElementById('saveIndicator');
+// 拖曳完後只更新顯示的名次數字 / top3 / top10 樣式，避免重建整個清單
+function updateRankNumbersInPlace() {
+  const el = document.getElementById('prefsList');
   if (!el) return;
-  el.className = 'save-indicator ' + state;
-  if (state === 'saving') el.textContent = '💾 儲存中...';
-  else if (state === 'saved') el.textContent = '✓ 已儲存';
-  else if (state === 'error') el.textContent = '✗ 儲存失敗';
-  else el.textContent = '';
+  const rows = el.querySelectorAll('.pref-row');
+  rows.forEach((row, idx) => {
+    const rank = idx + 1;
+    const numEl = row.querySelector('.pref-rank');
+    if (numEl) numEl.textContent = '#' + rank;
+    // 更新 top3 / top10 class
+    row.classList.remove('top3', 'top10');
+    if (rank <= 3) row.classList.add('top3');
+    else if (rank <= 10) row.classList.add('top10');
+  });
 }
 
-// debounce：拖完 800ms 沒再動才真的觸發儲存
-let savePrefsTimer = null;
-function debouncedSavePrefs() {
-  setSaveIndicator('saving');
-  clearTimeout(savePrefsTimer);
-  savePrefsTimer = setTimeout(actuallySavePrefs, 800);
+// 標記為「有未儲存變更」並更新儲存按鈕外觀
+function markPrefsDirty() {
+  prefsDirty = true;
+  updateSaveButton();
+}
+function markPrefsClean() {
+  prefsDirty = false;
+  updateSaveButton();
 }
 
-async function actuallySavePrefs() {
-  // 前端先擋一道
+function updateSaveButton() {
+  const btn = document.getElementById('prefsSaveBtn');
+  const txt = document.getElementById('prefsSaveBtnText');
+  const hint = document.getElementById('prefsHint');
+  if (!btn || !txt) return;
+  // 鎖定狀態優先：鎖了就 disabled 不管 dirty
   if (prefLockStatus.locked) {
-    setSaveIndicator('error');
-    showToast(`已過 ${prefLockStatus.cutoffHour}:00，偏好已鎖定`, 'error');
-    // 重新載入回原本狀態
-    loadMyPrefs();
+    btn.disabled = true;
+    btn.className = '';
+    txt.textContent = '已鎖定';
+    if (hint) hint.classList.remove('dirty');
     return;
   }
+  if (prefsDirty) {
+    btn.disabled = false;
+    btn.className = 'dirty';
+    txt.textContent = '儲存';
+    if (hint) {
+      hint.classList.add('dirty');
+      hint.textContent = '✏️ 有未儲存的變更，記得按右上「儲存」';
+    }
+  } else {
+    btn.disabled = true;
+    btn.className = '';
+    txt.textContent = '已儲存';
+    if (hint) {
+      hint.classList.remove('dirty');
+      hint.textContent = '長按並拖曳調整順序 · 拖完記得按「儲存」';
+    }
+  }
+}
+
+// 使用者點「儲存」按鈕
+async function savePrefsNow() {
+  if (!prefsDirty) return;
+  if (prefLockStatus.locked) {
+    showToast(`已過 ${prefLockStatus.cutoffHour}:00，偏好已鎖定`, 'error');
+    return;
+  }
+  // 切換按鈕為「儲存中」狀態
+  const btn = document.getElementById('prefsSaveBtn');
+  const txt = document.getElementById('prefsSaveBtnText');
+  btn.disabled = true;
+  btn.className = 'saving';
+  txt.textContent = '儲存中...';
+
   try {
     const res = await apiPost({
       action: 'savePreferences',
@@ -1594,19 +1676,19 @@ async function actuallySavePrefs() {
       orderedRestaurants: orderedPrefs
     });
     if (res.success) {
-      setSaveIndicator('saved');
-      setTimeout(() => setSaveIndicator(''), 2000);
+      markPrefsClean();
+      showToast('已儲存 ✅', 'success');
     } else {
-      // 後端拒絕（可能是剛好過了 12:00）
-      setSaveIndicator('error');
       if (res.error) showToast(res.error, 'error');
-      // 同步鎖定狀態並還原拖曳結果
+      // 後端拒絕（可能 12:00 過了）→ 同步鎖定狀態並重新載入
       prefLockStatus.locked = true;
       applyPrefLockUI();
-      loadMyPrefs(); // 重撈原本順序
+      loadMyPrefs();
     }
   } catch(e) {
-    setSaveIndicator('error');
+    showToast('儲存失敗，請再試一次', 'error');
+    // 失敗時保留 dirty 狀態讓使用者可以重試
+    updateSaveButton();
   }
 }
 
@@ -1641,8 +1723,8 @@ async function addRestaurant() {
       rebuildOrderedList();
       renderPrefsList();
       initSortable();
-      // 自動儲存讓後端也記錄這個新名次
-      debouncedSavePrefs();
+      // 新增餐廳會讓偏好清單變動（多一個項目），標記為有未存變更
+      markPrefsDirty();
     } else {
       showToast(res.error || '新增失敗', 'error');
     }
@@ -1817,6 +1899,14 @@ async function refreshPrefLockStatus() {
     }
   } catch(e) {}
 }
+
+// 關頁前若有未儲存的偏好變更，提示使用者
+window.addEventListener('beforeunload', (e) => {
+  if (prefsDirty && !prefLockStatus.locked) {
+    e.preventDefault();
+    e.returnValue = ''; // 現代瀏覽器需要這行才會顯示提示
+  }
+});
 
 // ══════════════════════════════════════════════
 // 啟動
