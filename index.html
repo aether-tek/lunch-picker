@@ -143,7 +143,7 @@
   .rank-item {
     display: flex; align-items: center; gap: 12px;
     background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 12px 14px;
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
     transition: transform .15s;
   }
   .rank-item.top3 { background: #1e1a0a; border-color: #c0980025; }
@@ -157,73 +157,6 @@
   .rank-detail.penalized { color: var(--danger); }
   .rank-score { font-size: 18px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
   .rank-item:not(.top3) .rank-score { font-size: 15px; color: var(--muted); }
-
-  /* ── 可點擊的排名項目（展開明細）── */
-  .rank-item-wrapper {
-    margin-bottom: 8px;
-    border-radius: 10px;
-    overflow: hidden;
-    transition: background .15s;
-  }
-  .rank-item-wrapper.expanded {
-    background: var(--surface2);
-  }
-  .rank-item-wrapper.expanded .rank-item {
-    margin-bottom: 0;
-    background: transparent;
-    border-color: transparent;
-  }
-  .rank-item-wrapper .rank-item {
-    cursor: pointer; transition: background .15s;
-  }
-  .rank-item-wrapper .rank-item:active {
-    background: var(--surface2);
-  }
-  .rank-expand-icon {
-    font-size: 11px; color: var(--muted); margin-left: 6px;
-    transition: transform .2s;
-    display: inline-block;
-  }
-  .rank-item-wrapper.expanded .rank-expand-icon {
-    transform: rotate(180deg);
-  }
-
-  /* 展開明細區 */
-  .rank-detail-panel {
-    max-height: 0; overflow: hidden;
-    transition: max-height .25s ease;
-  }
-  .rank-item-wrapper.expanded .rank-detail-panel {
-    max-height: 600px;
-  }
-  .rank-detail-inner {
-    padding: 0 16px 14px;
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
-    margin-top: 0;
-  }
-  .breakdown-table {
-    width: 100%; font-size: 12px; border-collapse: collapse;
-    margin-bottom: 10px;
-  }
-  .breakdown-table th, .breakdown-table td {
-    padding: 6px 8px; text-align: left;
-    border-bottom: 1px solid var(--border);
-  }
-  .breakdown-table th {
-    color: var(--muted); font-weight: 600; font-size: 11px;
-    text-transform: uppercase;
-  }
-  .breakdown-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .breakdown-table tr.abstain td { color: var(--muted); font-style: italic; }
-  .breakdown-table tr.me td:first-child { color: var(--gold); font-weight: 600; }
-  .breakdown-table tr.me td:first-child::before { content: "→ "; }
-  .breakdown-formula {
-    background: #0a0c12; border: 1px solid var(--border);
-    border-radius: 6px; padding: 8px 10px;
-    font-family: ui-monospace, "SF Mono", Consolas, monospace;
-    font-size: 12px; color: var(--gold); text-align: center;
-  }
 
   /* ── Participant chips ── */
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -308,90 +241,6 @@
   }
   .record-row { display: flex; gap: 8px; }
   .record-row select { flex: 1; }
-
-  /* ── How-it-works (modal) ── */
-  .info-btn {
-    background: none; border: 1px solid var(--border); color: var(--muted);
-    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 13px; font-family: inherit; padding: 0;
-    transition: all .15s;
-  }
-  .info-btn:active { transform: scale(.92); }
-  .info-btn:hover { color: var(--gold); border-color: var(--gold); }
-
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000;
-    display: none; align-items: flex-end; justify-content: center;
-    animation: fadeIn .2s ease;
-  }
-  .modal-overlay.show { display: flex; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-  .modal {
-    background: var(--surface); border-top: 1px solid var(--border);
-    border-radius: 16px 16px 0 0; width: 100%; max-width: 480px;
-    max-height: 85vh; overflow-y: auto;
-    animation: slideUp .25s ease;
-  }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-  .modal-header {
-    position: sticky; top: 0; background: var(--surface);
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 20px; border-bottom: 1px solid var(--border);
-  }
-  .modal-title { font-size: 17px; font-weight: 700; color: var(--gold); }
-  .modal-close {
-    background: none; border: none; color: var(--muted); cursor: pointer;
-    font-size: 22px; padding: 0 4px; line-height: 1;
-  }
-  .modal-body { padding: 20px; line-height: 1.65; }
-
-  /* 說明卡片內部元件 */
-  .rule-block {
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 14px; margin-bottom: 14px;
-  }
-  .rule-block-title {
-    font-size: 13px; font-weight: 700; color: var(--gold);
-    margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
-  }
-  .rule-block-body { font-size: 13px; color: var(--text); }
-  .rule-block-body p { margin-bottom: 8px; }
-  .rule-block-body p:last-child { margin-bottom: 0; }
-
-  /* 範例表格 */
-  .example-table {
-    width: 100%; font-size: 12px; border-collapse: collapse;
-    margin: 8px 0;
-  }
-  .example-table th, .example-table td {
-    padding: 6px 8px; text-align: left;
-    border-bottom: 1px solid var(--border);
-  }
-  .example-table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
-  .example-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .example-table .highlight { color: var(--gold); font-weight: 700; }
-
-  .formula {
-    background: #0a0c12; border: 1px solid var(--border);
-    border-radius: 8px; padding: 10px 12px; margin: 8px 0;
-    font-family: ui-monospace, "SF Mono", Consolas, monospace;
-    font-size: 12px; color: var(--gold); text-align: center;
-  }
-
-  .step-num {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 20px; height: 20px; border-radius: 50%;
-    background: var(--gold); color: var(--bg); font-size: 11px; font-weight: 700;
-  }
-
-  .feedback-note {
-    background: #1a1d0a; border: 1px solid #4a5a10;
-    border-radius: 8px; padding: 10px 12px; margin-top: 14px;
-    font-size: 12px; color: #c0d040; line-height: 1.5;
-  }
 </style>
 </head>
 <body>
@@ -502,10 +351,10 @@
     <div id="page-history" class="page">
       <div class="card">
         <div class="card-title">記錄今日午餐</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">選擇今天最終吃了什麼（或清除今日紀錄）</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">選擇今天最終吃了什麼</div>
         <div class="add-row">
-          <select id="historyRestSelect" onchange="updateRecordButton()"></select>
-          <button class="btn btn-secondary" id="recordBtn" onclick="recordToday()">記錄</button>
+          <select id="historyRestSelect"></select>
+          <button class="btn btn-secondary" onclick="recordToday()">記錄</button>
         </div>
       </div>
 
@@ -522,86 +371,11 @@
 
 <div id="toast"></div>
 
-<!-- ── 演算法說明 Modal ── -->
-<div class="modal-overlay" id="howItWorksModal" onclick="closeHowItWorks(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <div class="modal-title">🧮 排名怎麼算出來的</div>
-      <button class="modal-close" onclick="closeHowItWorks()">✕</button>
-    </div>
-    <div class="modal-body">
-
-      <div class="rule-block">
-        <div class="rule-block-title"><span class="step-num">1</span> 哪些餐廳會出現</div>
-        <div class="rule-block-body">
-          <p>系統會自動把<strong style="color:var(--gold)">最近 5 個上班日</strong>內吃過的餐廳排除掉（週六日不計入）。</p>
-          <p>例如：今天週三，回看過去 5 個上班日，這段期間吃過的店都不會出現在排名裡。等過了 5 個上班日後，那家店才會回到候選清單。</p>
-          <p style="color:var(--muted);font-size:12px">→ 被排除的餐廳會列在排名最下方的「最近吃過」區塊裡，方便大家確認。</p>
-        </div>
-      </div>
-
-      <div class="rule-block">
-        <div class="rule-block-title"><span class="step-num">2</span> 每個人的偏好怎麼變成分數</div>
-        <div class="rule-block-body">
-          <p>每個人到「我的偏好」頁面，把喜歡的餐廳排第 1～10 名。系統會把名次轉換成分數：</p>
-          <div class="formula">分數 = 11 − 名次</div>
-          <table class="example-table">
-            <tr><th>名次</th><th class="num">分數</th></tr>
-            <tr><td>第 1 名（最愛）</td><td class="num highlight">10 分</td></tr>
-            <tr><td>第 2 名</td><td class="num">9 分</td></tr>
-            <tr><td>第 5 名</td><td class="num">6 分</td></tr>
-            <tr><td>第 10 名</td><td class="num">1 分</td></tr>
-            <tr><td>沒設定（棄權）</td><td class="num">0 分</td></tr>
-          </table>
-        </div>
-      </div>
-
-      <div class="rule-block">
-        <div class="rule-block-title"><span class="step-num">3</span> 一家餐廳的最終分數</div>
-        <div class="rule-block-body">
-          <p>把<strong style="color:var(--gold)">所有今日出席者</strong>對該餐廳的分數加總，除以總出席人數：</p>
-          <div class="formula">平均分 = 所有人的分數總和 ÷ 出席人數</div>
-          <p>沒設定偏好的人視為投 0 分（棄權），這樣可以避免「只有 1 個人喜歡的店」分數虛高。</p>
-        </div>
-      </div>
-
-      <div class="rule-block" style="background:#1a1d0a;border-color:#4a5a10">
-        <div class="rule-block-title" style="color:#c0d040">💡 舉個例子（3 人出席）</div>
-        <div class="rule-block-body">
-          <p style="font-size:12px;color:var(--muted)">看「中興眷村」這家店：</p>
-          <table class="example-table">
-            <tr><th>出席者</th><th>排第幾</th><th class="num">分數</th></tr>
-            <tr><td>Webb</td><td>第 1 名</td><td class="num">10</td></tr>
-            <tr><td>Nicky</td><td>第 2 名</td><td class="num">9</td></tr>
-            <tr><td>wilson</td><td>沒設定</td><td class="num">0</td></tr>
-          </table>
-          <div class="formula">(10 + 9 + 0) ÷ 3 = 6.33 分</div>
-          <p style="font-size:12px;color:var(--muted)">→ 若有第 4 個人但沒設偏好，分數會被稀釋成 (10+9+0+0)÷4 = 4.75，店家排名會往後掉。</p>
-        </div>
-      </div>
-
-      <div class="rule-block">
-        <div class="rule-block-title"><span class="step-num">4</span> 排名規則總結</div>
-        <div class="rule-block-body">
-          <p>📊 <strong>平均分高的排前面</strong>。</p>
-          <p>🤝 <strong>同分時，有設偏好的人數多的優先</strong>（共識度高）。</p>
-          <p>✅ 至少要有 1 個人對這家餐廳設過偏好，才會列入排名。</p>
-        </div>
-      </div>
-
-      <div class="feedback-note">
-        💬 對演算法有想法？覺得計分方式可以調整？歡迎在團隊裡討論，這個系統就是希望讓大家一起決定怎麼選午餐 🍱
-      </div>
-
-    </div>
-  </div>
-</div>
-
 <script>
 // ══════════════════════════════════════════════
 // 設定：請填入你的 Apps Script 部署網址
 // ══════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbyFnRNN15cetTWLMPKsLNwxaQ7PtnCWlRCTq1t4L1Ny0bxm1tCVf2R3Y1r17v7tBJA9/exec';
+const API_URL = 'YOUR_APPS_SCRIPT_URL_HERE';
 
 // ══════════════════════════════════════════════
 // 狀態
@@ -620,19 +394,13 @@ let editMode = false;
 async function apiGet(params) {
   const url = new URL(API_URL);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString(), { redirect: 'follow' });
+  const res = await fetch(url.toString());
   return res.json();
 }
 
-async function apiPost(body) {
-  // 用 text/plain 避免 CORS preflight (OPTIONS)，Apps Script 不支援 OPTIONS
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body),
-    redirect: 'follow'
-  });
-  return res.json();
+// 所有寫入操作也改用 GET 參數
+async function apiPost(params) {
+  return apiGet(params);
 }
 
 // ══════════════════════════════════════════════
@@ -714,102 +482,30 @@ function renderRanking(data) {
     `<span class="chip ${p === myName ? 'me' : ''}">${p}${p === myName ? ' (我)' : ''}</span>`
   ).join('');
 
-  const n = data.participants.length;
   const items = data.ranking.map((r, i) => {
     const isTop3 = i < 3;
-    const coverageText = r.prefCount === n
-      ? `${n} 人都有設偏好`
-      : `${r.prefCount}/${n} 人有設偏好`;
-
-    // 計算明細表
-    const breakdownRows = (r.breakdown || []).map(b => {
-      const isAbstain = b.rank === null;
-      const isMe = b.person === myName;
-      const cls = (isAbstain ? 'abstain' : '') + (isMe ? ' me' : '');
-      const rankText = isAbstain ? '未設定' : `第 ${b.rank} 名`;
-      const scoreText = isAbstain ? '0 (棄權)' : b.score;
-      return `<tr class="${cls.trim()}">
-        <td>${b.person}${isMe ? ' (我)' : ''}</td>
-        <td>${rankText}</td>
-        <td class="num">${scoreText}</td>
-      </tr>`;
-    }).join('');
-
-    const total = r.total != null ? r.total : 0;
-    const formulaText = `(${(r.breakdown || []).map(b => b.score).join(' + ')}) ÷ ${n} = ${r.avgScore}`;
-
+    const penaltyText = r.penalty < 1
+      ? `${r.penaltyDays === 0 ? '今天' : r.penaltyDays + '天前'}吃過 · 懲罰 ${Math.round(r.penalty*100)}%`
+      : '';
     return `
-      <div class="rank-item-wrapper" id="rank-wrap-${i}">
-        <div class="rank-item ${isTop3 ? 'top3' : ''}" onclick="toggleRankDetail(${i})">
-          <div class="${isTop3 ? 'rank-medal' : 'rank-num'}">${isTop3 ? medals[i] : '#'+(i+1)}</div>
-          <div class="rank-info">
-            <div class="rank-name">${r.restaurant}<span class="rank-expand-icon">▾</span></div>
-            <div class="rank-detail">平均 ${r.avgScore} 分 · ${coverageText}</div>
-          </div>
-          <div class="rank-score">${r.finalScore}</div>
-        </div>
-        <div class="rank-detail-panel">
-          <div class="rank-detail-inner">
-            <table class="breakdown-table">
-              <tr><th>出席者</th><th>排名</th><th class="num">分數</th></tr>
-              ${breakdownRows}
-              <tr style="font-weight:700">
-                <td colspan="2">總和</td>
-                <td class="num">${total}</td>
-              </tr>
-            </table>
-            <div class="breakdown-formula">${formulaText}</div>
+      <div class="rank-item ${isTop3 ? 'top3' : ''}">
+        <div class="${isTop3 ? 'rank-medal' : 'rank-num'}">${isTop3 ? medals[i] : '#'+(i+1)}</div>
+        <div class="rank-info">
+          <div class="rank-name">${r.restaurant}</div>
+          <div class="rank-detail ${r.penalty < 1 ? 'penalized' : ''}">
+            ${r.penalty < 1 ? '⚠️ ' + penaltyText : `平均 ${r.avgScore} 分`}
           </div>
         </div>
+        <div class="rank-score">${r.finalScore}</div>
       </div>`;
   }).join('');
 
-  // 被「五個上班日不重複」規則排除的店
-  const excludedSection = (data.excluded && data.excluded.length > 0)
-    ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-         <div class="card-title" style="margin-bottom:6px">最近 5 個上班日已吃過（不列入）</div>
-         <div class="chips">${data.excluded.map(r => `<span class="chip">${r}</span>`).join('')}</div>
-       </div>`
-    : '';
-
   el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <div class="card-title" style="margin:0">今日參與（${data.participants.length} 人）</div>
-      <button class="info-btn" onclick="openHowItWorks()" title="排名怎麼算？">ℹ</button>
-    </div>
+    <div class="card-title" style="margin-bottom:6px">今日參與（${data.participants.length} 人）</div>
     <div class="chips" style="margin-bottom:16px">${participantChips}</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">💡 點任一餐廳可展開分數明細</div>
     ${items}
-    ${excludedSection}
     <div style="height:8px"></div>
   `;
-}
-
-// 展開/收合排名明細（手風琴效果：同時只展開一個）
-function toggleRankDetail(idx) {
-  const target = document.getElementById('rank-wrap-' + idx);
-  if (!target) return;
-  const isOpen = target.classList.contains('expanded');
-  // 先收合所有其他
-  document.querySelectorAll('.rank-item-wrapper.expanded').forEach(el => {
-    if (el !== target) el.classList.remove('expanded');
-  });
-  // 切換目標
-  target.classList.toggle('expanded', !isOpen);
-}
-
-// ══════════════════════════════════════════════
-// 演算法說明 modal
-// ══════════════════════════════════════════════
-function openHowItWorks() {
-  document.getElementById('howItWorksModal').classList.add('show');
-  document.body.style.overflow = 'hidden';
-}
-function closeHowItWorks(e) {
-  // 點 overlay（外層）或關閉按鈕才關，點 modal 內部不關
-  if (e && e.target.id !== 'howItWorksModal' && e.currentTarget !== e.target) return;
-  document.getElementById('howItWorksModal').classList.remove('show');
-  document.body.style.overflow = '';
 }
 
 // ══════════════════════════════════════════════
@@ -940,27 +636,12 @@ async function showPrefsContent() {
 async function loadRestaurants() {
   try {
     restaurants = await apiGet({ action: 'getRestaurants' });
-    // select 的內容由 rebuildHistorySelect 統一管理（會根據今日紀錄狀態決定）
-    // 初始化先給「沒紀錄」狀態；之後 loadHistoryPage 會再呼叫一次更新
-    rebuildHistorySelect(null);
+    // 更新歷史頁的餐廳選單
+    const sel = document.getElementById('historyRestSelect');
+    if (sel) {
+      sel.innerHTML = restaurants.map(r => `<option value="${r}">${r}</option>`).join('');
+    }
   } catch(e) {}
-}
-
-// 根據 select 當前值更新按鈕文字與樣式
-function updateRecordButton() {
-  const sel = document.getElementById('historyRestSelect');
-  const btn = document.getElementById('recordBtn');
-  if (!sel || !btn) return;
-  const val = sel.value;
-  if (val === '__clear__') {
-    btn.textContent = '清除';
-    btn.classList.remove('btn-secondary');
-    btn.classList.add('btn-danger');
-  } else {
-    btn.textContent = '記錄';
-    btn.classList.remove('btn-danger');
-    btn.classList.add('btn-secondary');
-  }
 }
 
 async function loadMyPrefs() {
@@ -1073,14 +754,11 @@ async function loadHistoryPage() {
     const history = await apiGet({ action: 'getHistory' });
     const DAYS = ['日','一','二','三','四','五','六'];
     const items = [];
-    let todayRecord = null;
     for (let d = 0; d < 7; d++) {
       const dt = new Date();
       dt.setDate(dt.getDate() - d);
-      // 用本地時區算日期，與後端 todayStr() (Asia/Taipei) 一致
-      const ds = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      const ds = dt.toISOString().split('T')[0];
       const rest = history[ds];
-      if (d === 0) todayRecord = rest || null;
       const label = d === 0 ? '今天' : d === 1 ? '昨天' : `${d} 天前`;
       const dayName = `週${DAYS[dt.getDay()]}`;
       items.push(`
@@ -1093,54 +771,14 @@ async function loadHistoryPage() {
         </div>`);
     }
     el.innerHTML = items.join('') || '<div style="color:var(--muted);padding:12px">無記錄</div>';
-    // 根據今天是否已有紀錄，重建記錄 select 的選項
-    rebuildHistorySelect(todayRecord);
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
   }
 }
 
-// 根據今天是否已有紀錄，決定 select 要顯示哪些選項
-// - 沒紀錄：顯示「請選擇」+ 餐廳清單
-// - 有紀錄：placeholder 改成顯示當前紀錄，並多一個「清除」選項
-function rebuildHistorySelect(todayRecord) {
-  const sel = document.getElementById('historyRestSelect');
-  if (!sel || !restaurants) return;
-  const placeholder = todayRecord
-    ? `<option value="" disabled selected>今天已記錄：${todayRecord}（可重選覆蓋）</option>`
-    : `<option value="" disabled selected>— 請選擇 —</option>`;
-  const clearOption = todayRecord
-    ? '<option value="__clear__">🗑️ 清除今日紀錄</option>'
-    : '';
-  const opts = restaurants.map(r => `<option value="${r}">${r}</option>`).join('');
-  sel.innerHTML = placeholder + clearOption + opts;
-  updateRecordButton();
-}
-
 async function recordToday() {
   const restaurant = document.getElementById('historyRestSelect').value;
   if (!restaurant) return showToast('請選擇餐廳', 'error');
-
-  // 清除情境：加二次確認避免誤觸
-  if (restaurant === '__clear__') {
-    if (!confirm('確定要清除今天的午餐紀錄嗎？\n清除後排名會重新把今天「曾經吃過」的餐廳列入候選。')) {
-      return;
-    }
-    try {
-      await apiPost({ action: 'recordHistory', restaurant: '__clear__' });
-      showToast('已清除今日紀錄 🗑️', 'success');
-      // 把 select 重置回 placeholder
-      const sel = document.getElementById('historyRestSelect');
-      sel.value = '';
-      updateRecordButton();
-      loadHistoryPage();
-    } catch(e) {
-      showToast('清除失敗', 'error');
-    }
-    return;
-  }
-
-  // 一般記錄情境
   try {
     await apiPost({ action: 'recordHistory', restaurant });
     showToast(`已記錄：${restaurant} ✅`, 'success');
