@@ -143,7 +143,7 @@
   .rank-item {
     display: flex; align-items: center; gap: 12px;
     background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+    border-radius: 10px; padding: 12px 14px;
     transition: transform .15s;
   }
   .rank-item.top3 { background: #1e1a0a; border-color: #c0980025; }
@@ -158,6 +158,132 @@
   .rank-score { font-size: 18px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
   .rank-item:not(.top3) .rank-score { font-size: 15px; color: var(--muted); }
 
+  /* ── 可點擊的排名項目（展開明細）── */
+  .rank-item-wrapper {
+    margin-bottom: 8px;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: background .15s;
+  }
+  .rank-item-wrapper.expanded {
+    background: var(--surface2);
+  }
+  .rank-item-wrapper.expanded .rank-item {
+    margin-bottom: 0;
+    background: transparent;
+    border-color: transparent;
+  }
+  .rank-item-wrapper .rank-item {
+    cursor: pointer; transition: background .15s;
+  }
+  .rank-item-wrapper .rank-item:active {
+    background: var(--surface2);
+  }
+  .rank-expand-icon {
+    font-size: 11px; color: var(--muted); margin-left: 6px;
+    transition: transform .2s;
+    display: inline-block;
+  }
+  .rank-item-wrapper.expanded .rank-expand-icon {
+    transform: rotate(180deg);
+  }
+
+  /* 展開明細區 */
+  .rank-detail-panel {
+    max-height: 0; overflow: hidden;
+    transition: max-height .25s ease;
+  }
+  .rank-item-wrapper.expanded .rank-detail-panel {
+    max-height: 600px;
+  }
+  .rank-detail-inner {
+    padding: 0 16px 14px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 0;
+  }
+  .breakdown-table {
+    width: 100%; font-size: 12px; border-collapse: collapse;
+    margin-bottom: 10px;
+  }
+  .breakdown-table th, .breakdown-table td {
+    padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown-table th {
+    color: var(--muted); font-weight: 600; font-size: 11px;
+    text-transform: uppercase;
+  }
+  .breakdown-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .breakdown-table tr.abstain td { color: var(--muted); font-style: italic; }
+  .breakdown-table tr.me td:first-child { color: var(--gold); font-weight: 600; }
+  .breakdown-table tr.me td:first-child::before { content: "→ "; }
+  .breakdown-formula {
+    background: #0a0c12; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px; color: var(--gold); text-align: center;
+  }
+
+  /* ── 評論區塊（明細展開區） ── */
+  .comments-section {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .comments-title {
+    font-size: 12px; color: var(--muted);
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .comment-item {
+    background: #0a0c12; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;
+    font-size: 12px; line-height: 1.5;
+  }
+  .comment-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 4px; gap: 8px;
+  }
+  .comment-author { font-weight: 600; color: var(--text); }
+  .comment-date { font-size: 10px; color: var(--muted); }
+  .comment-text { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .comment-empty {
+    font-size: 11px; color: var(--muted); font-style: italic;
+    text-align: center; padding: 8px;
+  }
+
+  /* 偏好頁的評論按鈕 */
+  .pref-comment-btn {
+    flex-shrink: 0; background: transparent;
+    border: 1px solid var(--border); color: var(--muted);
+    padding: 4px 8px; border-radius: 6px; cursor: pointer;
+    font-size: 12px; transition: all .15s;
+  }
+  .pref-comment-btn:hover, .pref-comment-btn.has-comment {
+    color: var(--gold); border-color: var(--gold);
+  }
+
+  /* 評論編輯 modal */
+  .comment-modal-body { padding: 16px 20px; }
+  .comment-modal-body textarea {
+    width: 100%; min-height: 100px; resize: vertical;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px; color: var(--text);
+    font-family: inherit; font-size: 13px; line-height: 1.5;
+    box-sizing: border-box;
+  }
+  .comment-modal-body textarea:focus {
+    outline: none; border-color: var(--gold);
+  }
+  .comment-counter {
+    font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px;
+  }
+  .comment-counter.over { color: var(--danger); }
+  .comment-modal-actions {
+    display: flex; gap: 8px; margin-top: 12px;
+    justify-content: flex-end;
+  }
+
   /* ── Participant chips ── */
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .chip {
@@ -167,18 +293,50 @@
   .chip.me { background: #1a1d0a; border-color: #4a5a10; color: #c0d040; }
 
   /* ── Preference rows ── */
+  /* ── 拖曳偏好清單 ── */
   .pref-row {
     display: flex; align-items: center; gap: 10px;
-    padding: 10px 0; border-bottom: 1px solid var(--border);
+    padding: 12px 14px; margin-bottom: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; cursor: grab;
+    transition: background .15s, transform .1s, box-shadow .15s;
+    user-select: none;
+    touch-action: none; /* SortableJS 在 iOS 拖曳必須 */
   }
-  .pref-row:last-child { border-bottom: none; }
+  .pref-row:active { cursor: grabbing; }
+  .pref-row.sortable-ghost {
+    opacity: .35; background: var(--bg);
+  }
+  .pref-row.sortable-chosen {
+    box-shadow: 0 4px 12px rgba(0,0,0,.5);
+    transform: scale(1.02);
+  }
+  .pref-row.sortable-drag {
+    cursor: grabbing;
+    box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  }
+  .pref-rank {
+    flex-shrink: 0; width: 36px;
+    font-size: 14px; font-weight: 700; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .pref-row.top3 .pref-rank { color: var(--gold); font-size: 18px; }
+  .pref-row.top10 .pref-rank { color: #c0a050; }
   .pref-name { flex: 1; font-size: 14px; }
-  .pref-select {
-    width: 110px; padding: 6px 10px; font-size: 13px;
-    background: var(--surface2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 6px;
+  .pref-handle {
+    flex-shrink: 0; color: var(--muted); font-size: 18px;
+    padding: 4px 6px;
   }
-  .pref-select.set { border-color: var(--gold); color: var(--gold); }
+
+  /* 儲存狀態指示 */
+  .save-indicator {
+    font-size: 11px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .save-indicator.saving { color: #c0a050; }
+  .save-indicator.saved { color: var(--green); }
+  .save-indicator.error { color: var(--danger); }
 
   /* ── Add restaurant ── */
   .add-row { display: flex; gap: 8px; margin-top: 8px; }
@@ -241,7 +399,93 @@
   }
   .record-row { display: flex; gap: 8px; }
   .record-row select { flex: 1; }
+
+  /* ── How-it-works (modal) ── */
+  .info-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-family: inherit; padding: 0;
+    transition: all .15s;
+  }
+  .info-btn:active { transform: scale(.92); }
+  .info-btn:hover { color: var(--gold); border-color: var(--gold); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000;
+    display: none; align-items: flex-end; justify-content: center;
+    animation: fadeIn .2s ease;
+  }
+  .modal-overlay.show { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal {
+    background: var(--surface); border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0; width: 100%; max-width: 480px;
+    max-height: 85vh; overflow-y: auto;
+    animation: slideUp .25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  .modal-header {
+    position: sticky; top: 0; background: var(--surface);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .modal-title { font-size: 17px; font-weight: 700; color: var(--gold); }
+  .modal-close {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 22px; padding: 0 4px; line-height: 1;
+  }
+  .modal-body { padding: 20px; line-height: 1.65; }
+
+  /* 說明卡片內部元件 */
+  .rule-block {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; margin-bottom: 14px;
+  }
+  .rule-block-title {
+    font-size: 13px; font-weight: 700; color: var(--gold);
+    margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .rule-block-body { font-size: 13px; color: var(--text); }
+  .rule-block-body p { margin-bottom: 8px; }
+  .rule-block-body p:last-child { margin-bottom: 0; }
+
+  /* 範例表格 */
+  .example-table {
+    width: 100%; font-size: 12px; border-collapse: collapse;
+    margin: 8px 0;
+  }
+  .example-table th, .example-table td {
+    padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .example-table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .example-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .example-table .highlight { color: var(--gold); font-weight: 700; }
+
+  .formula {
+    background: #0a0c12; border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; margin: 8px 0;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px; color: var(--gold); text-align: center;
+  }
+
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--gold); color: var(--bg); font-size: 11px; font-weight: 700;
+  }
+
+  .feedback-note {
+    background: #1a1d0a; border: 1px solid #4a5a10;
+    border-radius: 8px; padding: 10px 12px; margin-top: 14px;
+    font-size: 12px; color: #c0d040; line-height: 1.5;
+  }
 </style>
+<!-- SortableJS：用於拖曳排序偏好清單 -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
 <body>
 
@@ -332,16 +576,21 @@
         </div>
 
         <div class="card">
-          <div class="card-title">我的餐廳排名偏好</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-size:12px;color:var(--muted)">設定你最喜歡的前 10 名，未設定視為 0 分</div>
-            <button class="btn btn-sm" id="editModeBtn" onclick="toggleEditMode()"
-              style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-size:12px">
-              ✏️ 編輯
-            </button>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div class="card-title" style="margin:0">我的餐廳排名</div>
+            <span class="save-indicator" id="saveIndicator"></span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            長按並拖曳調整順序 · 第 1 名最喜歡 · 越下面越普通
           </div>
           <div id="prefsList">
             <div class="loading"><div class="spinner"></div>載入中...</div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px">
+            <button class="btn btn-sm" id="prefsEditBtn" onclick="togglePrefsEditMode()"
+              style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-size:12px">
+              ✏️ 編輯（刪除餐廳）
+            </button>
           </div>
         </div>
       </div>
@@ -351,10 +600,10 @@
     <div id="page-history" class="page">
       <div class="card">
         <div class="card-title">記錄今日午餐</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">選擇今天最終吃了什麼</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">選擇今天最終吃了什麼（或清除今日紀錄）</div>
         <div class="add-row">
-          <select id="historyRestSelect"></select>
-          <button class="btn btn-secondary" onclick="recordToday()">記錄</button>
+          <select id="historyRestSelect" onchange="updateRecordButton()"></select>
+          <button class="btn btn-secondary" id="recordBtn" onclick="recordToday()">記錄</button>
         </div>
       </div>
 
@@ -371,6 +620,101 @@
 
 <div id="toast"></div>
 
+<!-- ── 演算法說明 Modal ── -->
+<div class="modal-overlay" id="howItWorksModal" onclick="closeHowItWorks(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">🧮 排名怎麼算出來的</div>
+      <button class="modal-close" onclick="closeHowItWorks()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">1</span> 哪些餐廳會出現</div>
+        <div class="rule-block-body">
+          <p>系統會自動把<strong style="color:var(--gold)">最近 7 個上班日</strong>內吃過的餐廳排除掉（週六日不計入）。</p>
+          <p>例如：今天週三，回看過去 7 個上班日（約一週半），這段期間吃過的店都不會出現在排名裡。等過了 7 個上班日後，那家店才會回到候選清單。</p>
+          <p style="color:var(--muted);font-size:12px">→ 被排除的餐廳會列在排名最下方的「最近吃過」區塊裡，方便大家確認。</p>
+        </div>
+      </div>
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">2</span> 每個人的偏好怎麼變成分數</div>
+        <div class="rule-block-body">
+          <p>每個人到「我的偏好」頁面，<strong style="color:var(--gold)">拖曳所有餐廳排出個人順序</strong>。第 1 名最喜歡、越後面越普通。系統會把名次線性轉換成 0 ~ 10 分：</p>
+          <div class="formula">分數 = 10 × (總餐廳數 − 名次) ÷ (總餐廳數 − 1)</div>
+          <p style="font-size:12px;color:var(--muted)">舉例：總共 30 家餐廳</p>
+          <table class="example-table">
+            <tr><th>名次</th><th class="num">分數</th></tr>
+            <tr><td>第 1 名（最愛）</td><td class="num highlight">10 分</td></tr>
+            <tr><td>第 5 名</td><td class="num">8.62 分</td></tr>
+            <tr><td>第 15 名（中段）</td><td class="num">5.17 分</td></tr>
+            <tr><td>第 30 名（最後）</td><td class="num">0 分</td></tr>
+          </table>
+          <p style="font-size:12px;color:var(--muted)">沒吃過的餐廳也按你拖的位置算分，因為你可能會想試試看，或就是不想吃。</p>
+        </div>
+      </div>
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">3</span> 一家餐廳的最終分數</div>
+        <div class="rule-block-body">
+          <p>把<strong style="color:var(--gold)">所有今日出席者</strong>對該餐廳的分數加總，除以總出席人數：</p>
+          <div class="formula">平均分 = 所有人的分數總和 ÷ 出席人數</div>
+          <p>每個出席者都必須對所有餐廳排好順序才能參與運算，避免「沒填的人」干擾結果。</p>
+        </div>
+      </div>
+
+      <div class="rule-block" style="background:#1a1d0a;border-color:#4a5a10">
+        <div class="rule-block-title" style="color:#c0d040">💡 舉個例子（3 人出席，30 家餐廳）</div>
+        <div class="rule-block-body">
+          <p style="font-size:12px;color:var(--muted)">看「中興眷村」這家店：</p>
+          <table class="example-table">
+            <tr><th>出席者</th><th>排第幾</th><th class="num">分數</th></tr>
+            <tr><td>Webb</td><td>第 1 名</td><td class="num">10</td></tr>
+            <tr><td>Nicky</td><td>第 5 名</td><td class="num">8.62</td></tr>
+            <tr><td>wilson</td><td>第 20 名</td><td class="num">3.45</td></tr>
+          </table>
+          <div class="formula">(10 + 8.62 + 3.45) ÷ 3 = 7.36 分</div>
+        </div>
+      </div>
+
+      <div class="rule-block">
+        <div class="rule-block-title"><span class="step-num">4</span> 排名規則總結</div>
+        <div class="rule-block-body">
+          <p>📊 <strong>平均分高的排前面</strong>。</p>
+          <p>🍱 <strong>7 個上班日內吃過的店一律不顯示</strong>（硬性過濾）。</p>
+          <p>✅ <strong>所有出席者都必須拖曳完成個人排名</strong>，缺一不可。</p>
+        </div>
+      </div>
+
+      <div class="feedback-note">
+        💬 對演算法有想法？覺得計分方式可以調整？歡迎在團隊裡討論，這個系統就是希望讓大家一起決定怎麼選午餐 🍱
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── 評論編輯 Modal ── -->
+<div class="modal-overlay" id="commentEditModal" onclick="closeCommentEdit(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">💬 <span id="commentEditRest"></span></div>
+      <button class="modal-close" onclick="closeCommentEdit()">✕</button>
+    </div>
+    <div class="comment-modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">寫下你對這家店的評論（口味、推薦菜色、價位...）</div>
+      <textarea id="commentEditText" maxlength="150" placeholder="例如：招牌餛飩湯麵很讚，價位中等..."
+        oninput="updateCommentCounter()"></textarea>
+      <div class="comment-counter" id="commentCounter">0 / 150</div>
+      <div class="comment-modal-actions">
+        <button class="btn btn-danger btn-sm" id="commentDeleteBtn" onclick="deleteMyComment()" style="display:none">刪除</button>
+        <button class="btn btn-secondary" onclick="submitComment()">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════
 // 設定：請填入你的 Apps Script 部署網址
@@ -384,9 +728,10 @@ let myName = localStorage.getItem('lunchName') || '';
 let attending = false;
 let restaurants = [];
 let myPrefs = {};
+let orderedPrefs = []; // 使用者偏好的「排序陣列」，index 0 = 第 1 名
+let commentsCache = {}; // { 餐廳名: [{person, comment, updated_at}, ...] }
 let rankingData = null;
 let currentTab = 'ranking';
-let editMode = false;
 
 // ══════════════════════════════════════════════
 // API 工具
@@ -394,13 +739,19 @@ let editMode = false;
 async function apiGet(params) {
   const url = new URL(API_URL);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { redirect: 'follow' });
   return res.json();
 }
 
-// 所有寫入操作也改用 GET 參數
-async function apiPost(params) {
-  return apiGet(params);
+async function apiPost(body) {
+  // 用 text/plain 避免 CORS preflight (OPTIONS)，Apps Script 不支援 OPTIONS
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+    redirect: 'follow'
+  });
+  return res.json();
 }
 
 // ══════════════════════════════════════════════
@@ -457,8 +808,13 @@ async function loadRanking() {
   const el = document.getElementById('rankingContent');
   el.innerHTML = '<div class="loading"><div class="spinner"></div>計算中...</div>';
   try {
-    const data = await apiGet({ action: 'getRanking' });
+    // 排名和評論並行載入，加快速度
+    const [data, comments] = await Promise.all([
+      apiGet({ action: 'getRanking' }),
+      apiGet({ action: 'getComments' }).catch(() => ({}))
+    ]);
     rankingData = data;
+    commentsCache = comments || {};
     renderRanking(data);
   } catch(e) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">無法連線，請確認網址設定</div></div>';
@@ -469,10 +825,16 @@ function renderRanking(data) {
   const el = document.getElementById('rankingContent');
 
   if (!data.ranking || data.ranking.length === 0) {
+    // 特別處理「有人沒設完偏好」的情況
+    const isMissingPrefs = data.missingPrefs && data.missingPrefs.length > 0;
+    const icon = isMissingPrefs ? '⚠️' : '🍽️';
+    const extraHint = isMissingPrefs
+      ? `<br><br><span style="font-size:12px">尚未完成偏好設定者：${data.missingPrefs.map(m => m.person + '（缺 ' + m.missingCount + ' 家）').join('、')}</span>`
+      : (data.message ? '' : '<br><br>到「出席」頁開啟今日出席');
     el.innerHTML = `
       <div class="empty">
-        <div class="empty-icon">🍽️</div>
-        <div class="empty-text">${data.message || '今天還沒有人加入午餐'}<br><br>到「出席」頁開啟今日出席</div>
+        <div class="empty-icon">${icon}</div>
+        <div class="empty-text">${data.message || '今天還沒有人加入午餐'}${extraHint}</div>
       </div>`;
     return;
   }
@@ -482,49 +844,229 @@ function renderRanking(data) {
     `<span class="chip ${p === myName ? 'me' : ''}">${p}${p === myName ? ' (我)' : ''}</span>`
   ).join('');
 
+  const n = data.participants.length;
   const items = data.ranking.map((r, i) => {
     const isTop3 = i < 3;
-    const penaltyText = r.penalty < 1
-      ? `${r.penaltyDays === 0 ? '今天' : r.penaltyDays + '個工作日前'}吃過 · 封鎖中`
-      : '';
+
+    // 明細表：每人都有名次和分數
+    const breakdownRows = (r.breakdown || []).map(b => {
+      const isMe = b.person === myName;
+      const cls = isMe ? 'me' : '';
+      return `<tr class="${cls}">
+        <td>${b.person}${isMe ? ' (我)' : ''}</td>
+        <td>第 ${b.rank} 名</td>
+        <td class="num">${b.score}</td>
+      </tr>`;
+    }).join('');
+
+    const total = r.total != null ? r.total : 0;
+    const formulaText = `(${(r.breakdown || []).map(b => b.score).join(' + ')}) ÷ ${n} = ${r.avgScore}`;
+
     return `
-      <div class="rank-item ${isTop3 ? 'top3' : ''}" onclick="toggleDetail(this)">
-        <div class="${isTop3 ? 'rank-medal' : 'rank-num'}">${isTop3 ? medals[i] : '#'+(i+1)}</div>
-        <div class="rank-info">
-          <div class="rank-name">${r.restaurant}</div>
-          <div class="rank-detail ${r.penalty < 1 ? 'penalized' : ''}">
-            ${r.penalty < 1 ? '⚠️ ' + penaltyText : `平均 ${r.avgScore} 分`}
+      <div class="rank-item-wrapper" id="rank-wrap-${i}">
+        <div class="rank-item ${isTop3 ? 'top3' : ''}" onclick="toggleRankDetail(${i})">
+          <div class="${isTop3 ? 'rank-medal' : 'rank-num'}">${isTop3 ? medals[i] : '#'+(i+1)}</div>
+          <div class="rank-info">
+            <div class="rank-name">${r.restaurant}<span class="rank-expand-icon">▾</span></div>
+            <div class="rank-detail">平均 ${r.avgScore} 分</div>
           </div>
-          <div class="rank-expand" style="display:none; margin-top:6px; font-size:11px; color:var(--muted); line-height:1.8;">
-            平均分：${r.avgScore}<br>
-            懲罰係數：${Math.round(r.penalty * 100)}%<br>
-            最終分數：${r.finalScore}<br>
-            ${r.penaltyDays >= 0 ? `距上次：${r.penaltyDays} 個工作日前` : '近期未吃過'}
+          <div class="rank-score">${r.finalScore}</div>
+        </div>
+        <div class="rank-detail-panel">
+          <div class="rank-detail-inner">
+            <table class="breakdown-table">
+              <tr><th>出席者</th><th>排名</th><th class="num">分數</th></tr>
+              ${breakdownRows}
+              <tr style="font-weight:700">
+                <td colspan="2">總和</td>
+                <td class="num">${total}</td>
+              </tr>
+            </table>
+            <div class="breakdown-formula">${formulaText}</div>
+            ${renderCommentsForRest(r.restaurant)}
           </div>
         </div>
-        <div class="rank-score">${r.finalScore}</div>
       </div>`;
   }).join('');
 
+  // 被「7 個上班日不重複」規則排除的店
+  const excludedSection = (data.excluded && data.excluded.length > 0)
+    ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+         <div class="card-title" style="margin-bottom:6px">最近 7 個上班日已吃過（不列入）</div>
+         <div class="chips">${data.excluded.map(r => `<span class="chip">${r}</span>`).join('')}</div>
+       </div>`
+    : '';
+
   el.innerHTML = `
-    <div class="card-title" style="margin-bottom:6px">今日參與（${data.participants.length} 人）</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="card-title" style="margin:0">今日參與（${data.participants.length} 人）</div>
+      <button class="info-btn" onclick="openHowItWorks()" title="排名怎麼算？">ℹ</button>
+    </div>
     <div class="chips" style="margin-bottom:16px">${participantChips}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">💡 點任一餐廳可展開分數明細</div>
     ${items}
+    ${excludedSection}
     <div style="height:8px"></div>
   `;
 }
 
-function toggleDetail(el) {
-  const detail = el.querySelector('.rank-expand');
-  if (!detail) return;
-  const isOpen = detail.style.display !== 'none';
-  // 關閉所有已展開的
-  document.querySelectorAll('.rank-expand').forEach(d => d.style.display = 'none');
-  document.querySelectorAll('.rank-item').forEach(d => d.style.background = '');
-  if (!isOpen) {
-    detail.style.display = 'block';
-    el.style.background = el.classList.contains('top3') ? '#2a220a' : '#252840';
+// 展開/收合排名明細（手風琴效果：同時只展開一個）
+function toggleRankDetail(idx) {
+  const target = document.getElementById('rank-wrap-' + idx);
+  if (!target) return;
+  const isOpen = target.classList.contains('expanded');
+  // 先收合所有其他
+  document.querySelectorAll('.rank-item-wrapper.expanded').forEach(el => {
+    if (el !== target) el.classList.remove('expanded');
+  });
+  // 切換目標
+  target.classList.toggle('expanded', !isOpen);
+}
+
+// 渲染某餐廳的評論清單（用於排名頁明細展開）
+function renderCommentsForRest(restaurant) {
+  const list = commentsCache[restaurant] || [];
+  const escapeHTML = (s) => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  if (list.length === 0) {
+    return `
+      <div class="comments-section">
+        <div class="comments-title">💬 大家的評論</div>
+        <div class="comment-empty">尚無評論 — 到「我的偏好」頁點評論按鈕來寫一則</div>
+      </div>`;
   }
+  const items = list.map(c => `
+    <div class="comment-item">
+      <div class="comment-meta">
+        <span class="comment-author">${escapeHTML(c.person)}</span>
+        <span class="comment-date">${c.updated_at || ''}</span>
+      </div>
+      <div class="comment-text">${escapeHTML(c.comment)}</div>
+    </div>
+  `).join('');
+  return `
+    <div class="comments-section">
+      <div class="comments-title">💬 大家的評論（${list.length}）</div>
+      ${items}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// 評論編輯 modal
+// ══════════════════════════════════════════════
+let editingCommentRest = null;
+
+function openCommentEdit(restaurant) {
+  if (!myName) {
+    showToast('請先到「出席」頁輸入你的名字', 'error');
+    return;
+  }
+  editingCommentRest = restaurant;
+  document.getElementById('commentEditRest').textContent = restaurant;
+
+  // 找出當前使用者對這家店的現有評論
+  const list = commentsCache[restaurant] || [];
+  const mine = list.find(c => c.person === myName);
+  const existingText = mine ? mine.comment : '';
+
+  const textarea = document.getElementById('commentEditText');
+  textarea.value = existingText;
+  updateCommentCounter();
+
+  // 已有評論才顯示刪除按鈕
+  document.getElementById('commentDeleteBtn').style.display = existingText ? 'inline-flex' : 'none';
+
+  document.getElementById('commentEditModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => textarea.focus(), 100);
+}
+
+function closeCommentEdit(e) {
+  if (e && e.target.id !== 'commentEditModal' && e.currentTarget !== e.target) return;
+  document.getElementById('commentEditModal').classList.remove('show');
+  document.body.style.overflow = '';
+  editingCommentRest = null;
+}
+
+function updateCommentCounter() {
+  const textarea = document.getElementById('commentEditText');
+  const counter = document.getElementById('commentCounter');
+  const len = textarea.value.length;
+  counter.textContent = `${len} / 150`;
+  counter.classList.toggle('over', len > 150);
+}
+
+async function submitComment() {
+  if (!editingCommentRest) return;
+  const text = document.getElementById('commentEditText').value.trim();
+  if (text.length > 150) {
+    showToast('評論最多 150 字', 'error');
+    return;
+  }
+  try {
+    const res = await apiPost({
+      action: 'saveComment',
+      person: myName,
+      restaurant: editingCommentRest,
+      comment: text
+    });
+    if (res.success) {
+      showToast(text ? '評論已儲存 💬' : '評論已刪除', 'success');
+      closeCommentEdit();
+      // 重新載入評論並更新偏好頁的按鈕狀態
+      await refreshComments();
+    } else {
+      showToast(res.error || '儲存失敗', 'error');
+    }
+  } catch(e) {
+    showToast('儲存失敗', 'error');
+  }
+}
+
+async function deleteMyComment() {
+  if (!confirm('確定要刪除你的評論嗎？')) return;
+  document.getElementById('commentEditText').value = '';
+  await submitComment(); // 空字串 = 刪除
+}
+
+// 重新載入評論到 cache 並更新 UI
+async function refreshComments() {
+  try {
+    commentsCache = await apiGet({ action: 'getComments' }) || {};
+  } catch(e) {
+    return;
+  }
+  // 偏好頁如果開著，更新評論按鈕狀態
+  refreshPrefsCommentButtons();
+  // 排名頁如果開著，重新渲染（因為展開區的評論需要更新）
+  if (rankingData) {
+    renderRanking(rankingData);
+  }
+}
+
+// 更新偏好頁的評論按鈕（標示「已有評論」狀態）
+function refreshPrefsCommentButtons() {
+  document.querySelectorAll('.pref-comment-btn').forEach(btn => {
+    const rest = btn.getAttribute('data-rest');
+    const list = commentsCache[rest] || [];
+    const hasMine = list.some(c => c.person === myName);
+    btn.classList.toggle('has-comment', hasMine);
+  });
+}
+
+// ══════════════════════════════════════════════
+// 演算法說明 modal
+// ══════════════════════════════════════════════
+function openHowItWorks() {
+  document.getElementById('howItWorksModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeHowItWorks(e) {
+  // 點 overlay（外層）或關閉按鈕才關，點 modal 內部不關
+  if (e && e.target.id !== 'howItWorksModal' && e.currentTarget !== e.target) return;
+  document.getElementById('howItWorksModal').classList.remove('show');
+  document.body.style.overflow = '';
 }
 
 // ══════════════════════════════════════════════
@@ -655,64 +1197,170 @@ async function showPrefsContent() {
 async function loadRestaurants() {
   try {
     restaurants = await apiGet({ action: 'getRestaurants' });
-    // 更新歷史頁的餐廳選單
-    const sel = document.getElementById('historyRestSelect');
-    if (sel) {
-      sel.innerHTML = restaurants.map(r => `<option value="${r}">${r}</option>`).join('');
-    }
+    // select 的內容由 rebuildHistorySelect 統一管理（會根據今日紀錄狀態決定）
+    // 初始化先給「沒紀錄」狀態；之後 loadHistoryPage 會再呼叫一次更新
+    rebuildHistorySelect(null);
   } catch(e) {}
+}
+
+// 根據 select 當前值更新按鈕文字與樣式
+function updateRecordButton() {
+  const sel = document.getElementById('historyRestSelect');
+  const btn = document.getElementById('recordBtn');
+  if (!sel || !btn) return;
+  const val = sel.value;
+  if (val === '__clear__') {
+    btn.textContent = '清除';
+    btn.classList.remove('btn-secondary');
+    btn.classList.add('btn-danger');
+  } else {
+    btn.textContent = '記錄';
+    btn.classList.remove('btn-danger');
+    btn.classList.add('btn-secondary');
+  }
 }
 
 async function loadMyPrefs() {
   const el = document.getElementById('prefsList');
   el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
   try {
-    myPrefs = await apiGet({ action: 'getPreferences', person: myName });
+    const [prefs, comments] = await Promise.all([
+      apiGet({ action: 'getPreferences', person: myName }),
+      apiGet({ action: 'getComments' }).catch(() => ({}))
+    ]);
+    myPrefs = prefs;
+    commentsCache = comments || {};
+    // 把 myPrefs (對象 {rest: rank}) 轉成排序後的陣列
+    rebuildOrderedList();
     renderPrefsList();
+    initSortable();
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
   }
 }
 
-function toggleEditMode() {
-  editMode = !editMode;
-  const btn = document.getElementById('editModeBtn');
-  if (editMode) {
+// 把 myPrefs 物件 + restaurants 清單，整理成「使用者目前的排序陣列」
+// - 已設過名次的餐廳照名次排
+// - 還沒設過的餐廳按 restaurants 表單順序補在後面
+function rebuildOrderedList() {
+  const setRests = restaurants.filter(r => myPrefs[r]);
+  const unsetRests = restaurants.filter(r => !myPrefs[r]);
+  setRests.sort((a, b) => myPrefs[a] - myPrefs[b]);
+  orderedPrefs = setRests.concat(unsetRests);
+}
+
+let prefsEditMode = false;
+function togglePrefsEditMode() {
+  prefsEditMode = !prefsEditMode;
+  const btn = document.getElementById('prefsEditBtn');
+  if (prefsEditMode) {
     btn.textContent = '✅ 完成';
     btn.style.color = 'var(--green)';
     btn.style.borderColor = 'var(--green)';
   } else {
-    btn.textContent = '✏️ 編輯';
+    btn.textContent = '✏️ 編輯（刪除餐廳）';
     btn.style.color = 'var(--muted)';
     btn.style.borderColor = 'var(--border)';
   }
-  // 顯示或隱藏所有刪除按鈕
-  document.querySelectorAll('.del-btn').forEach(el => {
-    el.style.display = editMode ? 'inline-flex' : 'none';
+  // 顯示或隱藏刪除按鈕
+  document.querySelectorAll('.pref-del-btn').forEach(el => {
+    el.style.display = prefsEditMode ? 'inline-flex' : 'none';
   });
 }
 
 function renderPrefsList() {
   const el = document.getElementById('prefsList');
-  el.innerHTML = restaurants.map(rest => {
-    const currentRank = myPrefs[rest] || 0;
-    const safeRest = rest.replace(/'/g, "\\'");
-    const options = ['<option value="0">未設定</option>',
-      ...Array.from({length:10}, (_,i) => i+1).map(r =>
-        `<option value="${r}" ${currentRank === r ? 'selected' : ''}>第 ${r} 名</option>`)
-    ].join('');
+  if (!orderedPrefs || orderedPrefs.length === 0) {
+    el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">尚無餐廳，請先新增</div>';
+    return;
+  }
+  el.innerHTML = orderedPrefs.map((rest, idx) => {
+    const rank = idx + 1;
+    const rowClass = rank <= 3 ? 'top3' : (rank <= 10 ? 'top10' : '');
+    const safeRest = rest.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const escAttr = rest.replace(/"/g, '&quot;');
+    // 檢查是否已有自己的評論
+    const list = commentsCache[rest] || [];
+    const hasMine = list.some(c => c.person === myName);
     return `
-      <div class="pref-row" id="row-${encodeURIComponent(rest)}">
+      <div class="pref-row ${rowClass}" data-rest="${escAttr}">
+        <div class="pref-rank">#${rank}</div>
         <div class="pref-name">${rest}</div>
-        <select class="pref-select ${currentRank > 0 ? 'set' : ''}"
-          onchange="savePref('${safeRest}', this)">
-          ${options}
-        </select>
-        <button class="btn btn-danger btn-sm del-btn"
-          style="display:${editMode ? 'inline-flex' : 'none'}"
-          onclick="deleteRestaurant('${safeRest}')">🗑️</button>
+        <button class="pref-comment-btn ${hasMine ? 'has-comment' : ''}"
+          data-rest="${escAttr}"
+          onclick="event.stopPropagation();openCommentEdit('${safeRest}')"
+          title="評論">💬</button>
+        <button class="btn btn-danger btn-sm pref-del-btn"
+          style="display:${prefsEditMode ? 'inline-flex' : 'none'}"
+          onclick="event.stopPropagation();deleteRestaurant('${safeRest}')">🗑️</button>
+        <div class="pref-handle">≡</div>
       </div>`;
   }).join('');
+}
+
+let sortableInstance = null;
+function initSortable() {
+  const el = document.getElementById('prefsList');
+  if (!el) return;
+  if (sortableInstance) sortableInstance.destroy();
+  sortableInstance = Sortable.create(el, {
+    animation: 200,
+    delay: 150,           // 長按 150ms 才觸發拖曳（避免不小心滑動就觸發）
+    delayOnTouchOnly: true, // 只在觸控時用 delay，桌面滑鼠拖曳立即
+    touchStartThreshold: 5,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    onEnd: () => {
+      // 從 DOM 重新讀取順序
+      orderedPrefs = Array.from(el.querySelectorAll('.pref-row'))
+        .map(row => row.getAttribute('data-rest'));
+      // 同步更新 myPrefs（給其他地方用）
+      myPrefs = {};
+      orderedPrefs.forEach((r, i) => { myPrefs[r] = i + 1; });
+      // 重新渲染以更新名次數字
+      renderPrefsList();
+      // 觸發 debounced 儲存
+      debouncedSavePrefs();
+    }
+  });
+}
+
+// 儲存狀態指示
+function setSaveIndicator(state) {
+  const el = document.getElementById('saveIndicator');
+  if (!el) return;
+  el.className = 'save-indicator ' + state;
+  if (state === 'saving') el.textContent = '💾 儲存中...';
+  else if (state === 'saved') el.textContent = '✓ 已儲存';
+  else if (state === 'error') el.textContent = '✗ 儲存失敗';
+  else el.textContent = '';
+}
+
+// debounce：拖完 800ms 沒再動才真的觸發儲存
+let savePrefsTimer = null;
+function debouncedSavePrefs() {
+  setSaveIndicator('saving');
+  clearTimeout(savePrefsTimer);
+  savePrefsTimer = setTimeout(actuallySavePrefs, 800);
+}
+
+async function actuallySavePrefs() {
+  try {
+    const res = await apiPost({
+      action: 'savePreferences',
+      person: myName,
+      orderedRestaurants: orderedPrefs
+    });
+    if (res.success) {
+      setSaveIndicator('saved');
+      setTimeout(() => setSaveIndicator(''), 2000);
+    } else {
+      setSaveIndicator('error');
+    }
+  } catch(e) {
+    setSaveIndicator('error');
+  }
 }
 
 async function deleteRestaurant(name) {
@@ -732,18 +1380,6 @@ async function deleteRestaurant(name) {
   }
 }
 
-async function savePref(restaurant, selectEl) {
-  const rank = parseInt(selectEl.value);
-  selectEl.classList.toggle('set', rank > 0);
-  myPrefs[restaurant] = rank;
-  try {
-    await apiPost({ action: 'savePreference', person: myName, restaurant, rank });
-    showToast('已儲存', 'success');
-  } catch(e) {
-    showToast('儲存失敗', 'error');
-  }
-}
-
 async function addRestaurant() {
   const input = document.getElementById('newRestInput');
   const name = input.value.trim();
@@ -754,7 +1390,12 @@ async function addRestaurant() {
       input.value = '';
       showToast(`已新增「${name}」🎉`, 'success');
       await loadRestaurants();
+      // 新餐廳會自動補在 orderedPrefs 最後（透過 rebuildOrderedList）
+      rebuildOrderedList();
       renderPrefsList();
+      initSortable();
+      // 自動儲存讓後端也記錄這個新名次
+      debouncedSavePrefs();
     } else {
       showToast(res.error || '新增失敗', 'error');
     }
@@ -773,11 +1414,14 @@ async function loadHistoryPage() {
     const history = await apiGet({ action: 'getHistory' });
     const DAYS = ['日','一','二','三','四','五','六'];
     const items = [];
+    let todayRecord = null;
     for (let d = 0; d < 7; d++) {
       const dt = new Date();
       dt.setDate(dt.getDate() - d);
-      const ds = dt.toISOString().split('T')[0];
+      // 用本地時區算日期，與後端 todayStr() (Asia/Taipei) 一致
+      const ds = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
       const rest = history[ds];
+      if (d === 0) todayRecord = rest || null;
       const label = d === 0 ? '今天' : d === 1 ? '昨天' : `${d} 天前`;
       const dayName = `週${DAYS[dt.getDay()]}`;
       items.push(`
@@ -790,14 +1434,54 @@ async function loadHistoryPage() {
         </div>`);
     }
     el.innerHTML = items.join('') || '<div style="color:var(--muted);padding:12px">無記錄</div>';
+    // 根據今天是否已有紀錄，重建記錄 select 的選項
+    rebuildHistorySelect(todayRecord);
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
   }
 }
 
+// 根據今天是否已有紀錄，決定 select 要顯示哪些選項
+// - 沒紀錄：顯示「請選擇」+ 餐廳清單
+// - 有紀錄：placeholder 改成顯示當前紀錄，並多一個「清除」選項
+function rebuildHistorySelect(todayRecord) {
+  const sel = document.getElementById('historyRestSelect');
+  if (!sel || !restaurants) return;
+  const placeholder = todayRecord
+    ? `<option value="" disabled selected>今天已記錄：${todayRecord}（可重選覆蓋）</option>`
+    : `<option value="" disabled selected>— 請選擇 —</option>`;
+  const clearOption = todayRecord
+    ? '<option value="__clear__">🗑️ 清除今日紀錄</option>'
+    : '';
+  const opts = restaurants.map(r => `<option value="${r}">${r}</option>`).join('');
+  sel.innerHTML = placeholder + clearOption + opts;
+  updateRecordButton();
+}
+
 async function recordToday() {
   const restaurant = document.getElementById('historyRestSelect').value;
   if (!restaurant) return showToast('請選擇餐廳', 'error');
+
+  // 清除情境：加二次確認避免誤觸
+  if (restaurant === '__clear__') {
+    if (!confirm('確定要清除今天的午餐紀錄嗎？\n清除後排名會重新把今天「曾經吃過」的餐廳列入候選。')) {
+      return;
+    }
+    try {
+      await apiPost({ action: 'recordHistory', restaurant: '__clear__' });
+      showToast('已清除今日紀錄 🗑️', 'success');
+      // 把 select 重置回 placeholder
+      const sel = document.getElementById('historyRestSelect');
+      sel.value = '';
+      updateRecordButton();
+      loadHistoryPage();
+    } catch(e) {
+      showToast('清除失敗', 'error');
+    }
+    return;
+  }
+
+  // 一般記錄情境
   try {
     await apiPost({ action: 'recordHistory', restaurant });
     showToast(`已記錄：${restaurant} ✅`, 'success');
