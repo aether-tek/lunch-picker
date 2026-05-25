@@ -1662,32 +1662,37 @@ async function savePrefsNow() {
     showToast(`已過 ${prefLockStatus.cutoffHour}:00，偏好已鎖定`, 'error');
     return;
   }
-  // 切換按鈕為「儲存中」狀態
-  const btn = document.getElementById('prefsSaveBtn');
-  const txt = document.getElementById('prefsSaveBtnText');
-  btn.disabled = true;
-  btn.className = 'saving';
-  txt.textContent = '儲存中...';
 
+  // 樂觀更新：立刻把按鈕變回「已儲存」狀態，給使用者即時反饋
+  // 背景送 API，失敗時再 rollback
+  const snapshot = orderedPrefs.slice(); // 保存當前順序以便失敗時 rollback
+  markPrefsClean();
+  showToast('已儲存 ✅', 'success');
+
+  // 背景發送 API，不再 await（不阻塞 UI）
   try {
     const res = await apiPost({
       action: 'savePreferences',
       person: myName,
-      orderedRestaurants: orderedPrefs
+      orderedRestaurants: snapshot
     });
-    if (res.success) {
-      markPrefsClean();
-      showToast('已儲存 ✅', 'success');
-    } else {
+    if (!res.success) {
+      // 後端拒絕 → 標記 dirty 讓使用者知道要重存，並顯示原因
       if (res.error) showToast(res.error, 'error');
-      // 後端拒絕（可能 12:00 過了）→ 同步鎖定狀態並重新載入
-      prefLockStatus.locked = true;
-      applyPrefLockUI();
-      loadMyPrefs();
+      else showToast('儲存失敗，請再試一次', 'error');
+      prefsDirty = true;
+      updateSaveButton();
+      // 若是被 12:00 鎖了 → 同步鎖定狀態並重新載入伺服器版本
+      if (res.error && res.error.indexOf('鎖定') !== -1) {
+        prefLockStatus.locked = true;
+        applyPrefLockUI();
+        loadMyPrefs();
+      }
     }
   } catch(e) {
+    // 網路錯誤 → rollback 為 dirty 狀態讓使用者重試
     showToast('儲存失敗，請再試一次', 'error');
-    // 失敗時保留 dirty 狀態讓使用者可以重試
+    prefsDirty = true;
     updateSaveButton();
   }
 }
