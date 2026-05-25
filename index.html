@@ -352,6 +352,31 @@
   .history-rest { font-size: 14px; font-weight: 600; }
   .history-days { font-size: 11px; color: var(--muted); }
 
+  /* 月份分組標題 */
+  .history-month-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 16px 0 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-month-header:first-child { margin-top: 0; }
+  .history-month-title {
+    font-size: 13px; font-weight: 700; color: var(--gold);
+  }
+  .history-month-count {
+    font-size: 11px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  /* 月份內最後一個 item 不顯示下底線（給下個月份標題畫的） */
+  .history-month-group .history-item:last-child {
+    border-bottom: none;
+  }
+  /* 今天那一格的特別樣式 */
+  .history-item.is-today .history-rest { color: var(--gold); }
+  .history-item.is-today .history-days {
+    color: var(--gold); font-weight: 600;
+  }
+
   /* ── Empty state ── */
   .empty {
     text-align: center; padding: 48px 20px; color: var(--muted);
@@ -608,7 +633,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">近期歷史（7天）</div>
+        <div class="card-title">用餐歷史</div>
         <div id="historyList">
           <div class="loading"><div class="spinner"></div>載入中...</div>
         </div>
@@ -1413,28 +1438,87 @@ async function loadHistoryPage() {
   try {
     const history = await apiGet({ action: 'getHistory' });
     const DAYS = ['日','一','二','三','四','五','六'];
-    const items = [];
-    let todayRecord = null;
-    for (let d = 0; d < 7; d++) {
-      const dt = new Date();
-      dt.setDate(dt.getDate() - d);
-      // 用本地時區算日期，與後端 todayStr() (Asia/Taipei) 一致
-      const ds = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-      const rest = history[ds];
-      if (d === 0) todayRecord = rest || null;
-      const label = d === 0 ? '今天' : d === 1 ? '昨天' : `${d} 天前`;
-      const dayName = `週${DAYS[dt.getDay()]}`;
-      items.push(`
-        <div class="history-item">
-          <div>
-            <div class="history-date">${ds} ${dayName}</div>
-            <div class="history-rest">${rest || '—'}</div>
-          </div>
-          <div class="history-days">${label}</div>
-        </div>`);
+
+    // 今天的日期字串（用本地時區，與後端對齊）
+    const todayDt = new Date();
+    const todayDs = `${todayDt.getFullYear()}-${String(todayDt.getMonth()+1).padStart(2,'0')}-${String(todayDt.getDate()).padStart(2,'0')}`;
+
+    // 取得所有有紀錄的日期，從新到舊排序
+    const allDates = Object.keys(history)
+      .filter(ds => history[ds]) // 過濾掉空值
+      .sort((a, b) => b.localeCompare(a)); // 新 → 舊
+
+    let todayRecord = history[todayDs] || null;
+
+    // 如果今天還沒紀錄，但 allDates 裡也沒有今天 → 額外加一筆「今天 —」放在最前面
+    const hasToday = allDates.includes(todayDs);
+    if (!hasToday) allDates.unshift(todayDs);
+
+    if (allDates.length === 0 || (allDates.length === 1 && !history[todayDs])) {
+      // 完全沒紀錄
+      el.innerHTML = '<div style="color:var(--muted);padding:12px;text-align:center">尚無用餐紀錄</div>';
+      rebuildHistorySelect(null);
+      return;
     }
-    el.innerHTML = items.join('') || '<div style="color:var(--muted);padding:12px">無記錄</div>';
-    // 根據今天是否已有紀錄，重建記錄 select 的選項
+
+    // 依月份分組（YYYY-MM）
+    const byMonth = {};
+    allDates.forEach(ds => {
+      const monthKey = ds.substring(0, 7); // "2026-05"
+      if (!byMonth[monthKey]) byMonth[monthKey] = [];
+      byMonth[monthKey].push(ds);
+    });
+
+    // 算「N 天前」的工具
+    const daysAgo = (ds) => {
+      const dt = new Date(ds + 'T00:00:00');
+      const today = new Date(todayDs + 'T00:00:00');
+      return Math.round((today - dt) / 86400000);
+    };
+
+    // 渲染：依月份從新到舊
+    const sortedMonths = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
+    const html = sortedMonths.map(monthKey => {
+      const [year, month] = monthKey.split('-');
+      const dates = byMonth[monthKey];
+      // 該月實際有紀錄的天數（不含今天無紀錄的佔位）
+      const recordedCount = dates.filter(ds => history[ds]).length;
+
+      const items = dates.map(ds => {
+        const rest = history[ds];
+        const dt = new Date(ds + 'T00:00:00');
+        const dayName = `週${DAYS[dt.getDay()]}`;
+        const dayInt = parseInt(ds.split('-')[2], 10);
+        const diff = daysAgo(ds);
+        const isToday = diff === 0;
+        let label;
+        if (isToday) label = '今天';
+        else if (diff === 1) label = '昨天';
+        else if (diff < 7) label = `${diff} 天前`;
+        else if (diff < 30) label = `${Math.floor(diff/7)} 週前`;
+        else label = `${Math.floor(diff/30)} 個月前`;
+
+        return `
+          <div class="history-item ${isToday ? 'is-today' : ''}">
+            <div>
+              <div class="history-date">${dayInt} 日（${dayName}）</div>
+              <div class="history-rest">${rest || '—'}</div>
+            </div>
+            <div class="history-days">${label}</div>
+          </div>`;
+      }).join('');
+
+      return `
+        <div class="history-month-group">
+          <div class="history-month-header">
+            <div class="history-month-title">${year} 年 ${parseInt(month,10)} 月</div>
+            <div class="history-month-count">${recordedCount} 筆</div>
+          </div>
+          ${items}
+        </div>`;
+    }).join('');
+
+    el.innerHTML = html;
     rebuildHistorySelect(todayRecord);
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
