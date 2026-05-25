@@ -230,6 +230,27 @@
     margin-top: 14px; padding-top: 12px;
     border-top: 1px solid var(--border);
   }
+
+  /* ── 今日午餐已確定（鎖定畫面） ── */
+  .locked-card {
+    background: linear-gradient(135deg, #1a1d0a 0%, #2a2410 100%);
+    border: 1px solid #4a5a10;
+    border-radius: 12px;
+    padding: 24px 20px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .locked-label {
+    font-size: 13px; color: #c0d040;
+    margin-bottom: 12px;
+    letter-spacing: .5px;
+  }
+  .locked-rest {
+    font-size: 28px; font-weight: 700; color: var(--gold);
+    line-height: 1.3;
+    margin-bottom: 4px;
+    word-break: break-word;
+  }
   .comments-title {
     font-size: 12px; color: var(--muted);
     margin-bottom: 8px;
@@ -581,6 +602,25 @@
           </div>
         </div>
       </div>
+
+      <!-- 今日午餐已記錄時的鎖定畫面 -->
+      <div id="attendLockedCard" style="display:none">
+        <div class="locked-card">
+          <div class="locked-label">✅ 今日午餐已確定</div>
+          <div class="locked-rest">🍱 <span id="attendLockedRest"></span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:14px;text-align:center;line-height:1.6">
+            出席狀態已鎖定<br>
+            若要修改，請到「歷史」頁清除今日紀錄
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="card-title">今天一起吃的人</div>
+          <div id="attendLockedPeople" class="chips">
+            <span style="color:var(--muted);font-size:13px">載入中...</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── 偏好設定頁 ── -->
@@ -755,6 +795,7 @@ let restaurants = [];
 let myPrefs = {};
 let orderedPrefs = []; // 使用者偏好的「排序陣列」，index 0 = 第 1 名
 let commentsCache = {}; // { 餐廳名: [{person, comment, updated_at}, ...] }
+let todayLockedRest = null; // 今天已記錄的餐廳名（有值代表進入鎖定狀態）
 let rankingData = null;
 let currentTab = 'ranking';
 
@@ -833,13 +874,18 @@ async function loadRanking() {
   const el = document.getElementById('rankingContent');
   el.innerHTML = '<div class="loading"><div class="spinner"></div>計算中...</div>';
   try {
-    // 排名和評論並行載入，加快速度
-    const [data, comments] = await Promise.all([
+    // 並行載入：排名、評論、歷史（為了判斷今天是否已記錄）
+    const [data, comments, history] = await Promise.all([
       apiGet({ action: 'getRanking' }),
-      apiGet({ action: 'getComments' }).catch(() => ({}))
+      apiGet({ action: 'getComments' }).catch(() => ({})),
+      apiGet({ action: 'getHistory' }).catch(() => ({}))
     ]);
     rankingData = data;
     commentsCache = comments || {};
+    // 用本地時區算今日字串，與後端對齊
+    const dt = new Date();
+    const todayDs = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    todayLockedRest = (history && history[todayDs]) || null;
     renderRanking(data);
   } catch(e) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">無法連線，請確認網址設定</div></div>';
@@ -848,6 +894,12 @@ async function loadRanking() {
 
 function renderRanking(data) {
   const el = document.getElementById('rankingContent');
+
+  // 鎖定狀態：今天已記錄午餐 → 顯示「今天吃了 X」固定畫面
+  if (todayLockedRest) {
+    renderLockedRanking(data);
+    return;
+  }
 
   if (!data.ranking || data.ranking.length === 0) {
     // 特別處理「有人沒設完偏好」的情況
@@ -930,6 +982,71 @@ function renderRanking(data) {
     <div class="chips" style="margin-bottom:16px">${participantChips}</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">💡 點任一餐廳可展開分數明細</div>
     ${items}
+    ${excludedSection}
+    <div style="height:8px"></div>
+  `;
+}
+
+// 鎖定狀態：今天已記錄午餐，顯示「今天吃了 X」固定畫面
+function renderLockedRanking(data) {
+  const el = document.getElementById('rankingContent');
+  const rest = todayLockedRest;
+  const escapeHTML = (s) => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const safeRest = rest.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+  // 評論統計
+  const list = commentsCache[rest] || [];
+  const hasMine = myName && list.some(c => c.person === myName);
+  const commentBtnText = hasMine ? '✏️ 編輯我的評論' : '💬 寫評論';
+
+  // 出席者 chips（給歷史感）
+  const participantsHTML = (data.participants && data.participants.length > 0)
+    ? `<div class="chips" style="margin-bottom:16px">${data.participants.map(p =>
+        `<span class="chip ${p === myName ? 'me' : ''}">${escapeHTML(p)}${p === myName ? ' (我)' : ''}</span>`
+      ).join('')}</div>`
+    : '';
+
+  // 被排除清單
+  const excludedSection = (data.excluded && data.excluded.length > 0)
+    ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+         <div class="card-title" style="margin-bottom:6px">最近 7 個上班日已吃過</div>
+         <div class="chips">${data.excluded.map(r => `<span class="chip">${escapeHTML(r)}</span>`).join('')}</div>
+       </div>`
+    : '';
+
+  // 評論列表
+  const commentsHTML = list.length === 0
+    ? '<div class="comment-empty">尚無評論，點上方按鈕來寫第一則</div>'
+    : list.map(c => `
+        <div class="comment-item">
+          <div class="comment-meta">
+            <span class="comment-author">${escapeHTML(c.person)}</span>
+            <span class="comment-date">${c.updated_at || ''}</span>
+          </div>
+          <div class="comment-text">${escapeHTML(c.comment)}</div>
+        </div>`).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="card-title" style="margin:0">今日午餐</div>
+    </div>
+    ${participantsHTML}
+
+    <div class="locked-card">
+      <div class="locked-label">✅ 今日午餐已確定</div>
+      <div class="locked-rest">🍱 ${escapeHTML(rest)}</div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+        <button class="btn btn-secondary" onclick="openCommentEdit('${safeRest}')">${commentBtnText}</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">
+        若要修改，請到「歷史」頁清除今日紀錄
+      </div>
+    </div>
+
+    <div class="card-title" style="margin-top:20px;margin-bottom:10px">💬 大家對這家店的評論（${list.length}）</div>
+    ${commentsHTML}
+
     ${excludedSection}
     <div style="height:8px"></div>
   `;
@@ -1157,20 +1274,35 @@ async function refreshAttendance() {
 
 async function refreshPeopleList() {
   try {
-    const data = await apiGet({ action: 'getAttendance' });
+    // 並行撈出席和歷史（為了判斷今天是否已記錄午餐）
+    const [data, history] = await Promise.all([
+      apiGet({ action: 'getAttendance' }),
+      apiGet({ action: 'getHistory' }).catch(() => ({}))
+    ]);
+    const dt = new Date();
+    const todayDs = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    todayLockedRest = (history && history[todayDs]) || null;
     updatePeopleList(data);
   } catch(e) {}
 }
 
 function updatePeopleList(data) {
-  const peopleEl = document.getElementById('todayPeople');
   const attendees = Object.keys(data).filter(p => data[p]);
-  if (attendees.length === 0) {
-    peopleEl.innerHTML = '<span style="color:var(--muted);font-size:13px">還沒有人加入</span>';
+  const chipsHTML = attendees.length === 0
+    ? '<span style="color:var(--muted);font-size:13px">還沒有人加入</span>'
+    : attendees.map(p => `<span class="chip ${p === myName ? 'me' : ''}">${p}</span>`).join('');
+
+  if (todayLockedRest) {
+    // 鎖定狀態：隱藏切換 UI，顯示鎖定卡
+    document.getElementById('attendCard').style.display = 'none';
+    document.getElementById('attendLockedCard').style.display = 'block';
+    document.getElementById('attendLockedRest').textContent = todayLockedRest;
+    document.getElementById('attendLockedPeople').innerHTML = chipsHTML;
   } else {
-    peopleEl.innerHTML = attendees.map(p =>
-      `<span class="chip ${p === myName ? 'me' : ''}">${p}</span>`
-    ).join('');
+    // 正常狀態
+    document.getElementById('attendCard').style.display = 'block';
+    document.getElementById('attendLockedCard').style.display = 'none';
+    document.getElementById('todayPeople').innerHTML = chipsHTML;
   }
 }
 
@@ -1187,6 +1319,11 @@ function updateToggleUI() {
 
 async function toggleAttend() {
   if (!myName) return showToast('請先輸入名字', 'error');
+  // 鎖定狀態：拒絕切換
+  if (todayLockedRest) {
+    showToast('今日午餐已記錄，出席無法再變動', 'error');
+    return;
+  }
   attending = !attending;
   updateToggleUI();
   try {
@@ -1558,7 +1695,11 @@ async function recordToday() {
       const sel = document.getElementById('historyRestSelect');
       sel.value = '';
       updateRecordButton();
-      loadHistoryPage();
+      // 重新整理所有相關頁面（解除鎖定）
+      todayLockedRest = null;
+      await loadHistoryPage();
+      loadRanking();        // 背景更新排名
+      refreshPeopleList();  // 背景更新出席頁
     } catch(e) {
       showToast('清除失敗', 'error');
     }
@@ -1569,7 +1710,11 @@ async function recordToday() {
   try {
     await apiPost({ action: 'recordHistory', restaurant });
     showToast(`已記錄：${restaurant} ✅`, 'success');
-    loadHistoryPage();
+    // 進入鎖定狀態，更新相關頁面
+    todayLockedRest = restaurant;
+    await loadHistoryPage();
+    loadRanking();        // 背景更新排名（會切換到鎖定畫面）
+    refreshPeopleList();  // 背景更新出席頁（會切換到鎖定畫面）
   } catch(e) {
     showToast('記錄失敗', 'error');
   }
