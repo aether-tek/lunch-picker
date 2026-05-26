@@ -279,9 +279,30 @@
     border: 1px solid var(--border); color: var(--muted);
     padding: 4px 8px; border-radius: 6px; cursor: pointer;
     font-size: 12px; transition: all .15s;
+    position: relative;
+    display: inline-flex; align-items: center; gap: 4px;
   }
-  .pref-comment-btn:hover, .pref-comment-btn.has-comment {
+  /* 只有別人評論過（自己沒寫）→ 維持灰色外框，但內部顯示徽章 */
+  .pref-comment-btn.has-others {
+    color: var(--text);
+    border-color: #555;
+  }
+  /* 自己評論過 → 金色外框（最高優先） */
+  .pref-comment-btn:hover,
+  .pref-comment-btn.has-comment {
     color: var(--gold); border-color: var(--gold);
+  }
+  /* 徽章：顯示總評論數 */
+  .pref-comment-badge {
+    background: #444; color: #fff;
+    font-size: 10px; line-height: 1;
+    padding: 2px 5px; border-radius: 8px;
+    font-weight: 600;
+    min-width: 14px; text-align: center;
+  }
+  /* 自己評論過時徽章變金色 */
+  .pref-comment-btn.has-comment .pref-comment-badge {
+    background: var(--gold); color: var(--bg);
   }
 
   /* 評論編輯 modal */
@@ -1298,13 +1319,30 @@ async function refreshComments() {
   }
 }
 
-// 更新偏好頁的評論按鈕（標示「已有評論」狀態）
+// 更新偏好頁的評論按鈕（標示「已有評論」狀態並更新徽章數量）
 function refreshPrefsCommentButtons() {
   document.querySelectorAll('.pref-comment-btn').forEach(btn => {
     const rest = btn.getAttribute('data-rest');
     const list = commentsCache[rest] || [];
+    const total = list.length;
     const hasMine = list.some(c => c.person === myName);
+    const hasOthers = total > (hasMine ? 1 : 0);
     btn.classList.toggle('has-comment', hasMine);
+    btn.classList.toggle('has-others', hasOthers && !hasMine);
+    // 更新徽章
+    const existingBadge = btn.querySelector('.pref-comment-badge');
+    if (total > 0) {
+      if (existingBadge) {
+        existingBadge.textContent = total;
+      } else {
+        const badge = document.createElement('span');
+        badge.className = 'pref-comment-badge';
+        badge.textContent = total;
+        btn.appendChild(badge);
+      }
+    } else if (existingBadge) {
+      existingBadge.remove();
+    }
   });
 }
 
@@ -1607,17 +1645,22 @@ function renderPrefsList() {
     const rowClass = rank <= 3 ? 'top3' : (rank <= 10 ? 'top10' : '');
     const safeRest = rest.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const escAttr = rest.replace(/"/g, '&quot;');
-    // 檢查是否已有自己的評論
+    // 檢查評論狀態
     const list = commentsCache[rest] || [];
+    const total = list.length;
     const hasMine = list.some(c => c.person === myName);
+    const hasOthers = total > (hasMine ? 1 : 0);
+    // class 與徽章：自己評論過 → 金色（最高優先）；只有別人 → 灰框 has-others；都沒有 → 預設
+    const btnClass = hasMine ? 'has-comment' : (hasOthers ? 'has-others' : '');
+    const badge = total > 0 ? `<span class="pref-comment-badge">${total}</span>` : '';
     return `
       <div class="pref-row ${rowClass}" data-rest="${escAttr}">
         <div class="pref-rank">#${rank}</div>
         <div class="pref-name">${rest}</div>
-        <button class="pref-comment-btn ${hasMine ? 'has-comment' : ''}"
+        <button class="pref-comment-btn ${btnClass}"
           data-rest="${escAttr}"
           onclick="event.stopPropagation();openCommentEdit('${safeRest}')"
-          title="評論">💬</button>
+          title="評論">💬${badge}</button>
         <button class="btn btn-danger btn-sm pref-del-btn"
           style="display:${prefsEditMode ? 'inline-flex' : 'none'}"
           onclick="event.stopPropagation();deleteRestaurant('${safeRest}')">🗑️</button>
