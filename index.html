@@ -1762,6 +1762,13 @@ async function savePrefsNow() {
     return;
   }
 
+  // 防護：確認 orderedPrefs 涵蓋所有餐廳，避免送出殘缺資料蓋掉後端好資料
+  if (orderedPrefs.length < restaurants.length - 1) {
+    showToast(`偏好清單異常（${orderedPrefs.length}/${restaurants.length}），重新載入...`, 'error');
+    loadMyPrefs();
+    return;
+  }
+
   // 樂觀更新：立刻把按鈕變回「已儲存」狀態，給使用者即時反饋
   // 背景送 API，失敗時再 rollback
   const snapshot = orderedPrefs.slice(); // 保存當前順序以便失敗時 rollback
