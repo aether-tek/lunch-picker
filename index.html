@@ -836,6 +836,12 @@
         <button class="btn btn-danger btn-sm" id="commentDeleteBtn" onclick="deleteMyComment()" style="display:none">刪除</button>
         <button class="btn btn-secondary" onclick="submitComment()">儲存</button>
       </div>
+
+      <!-- 其他人對這家店的評論 -->
+      <div id="othersCommentsSection" class="comments-section" style="display:none">
+        <div class="comments-title">💬 <span id="othersCommentsTitle">其他人的評論</span></div>
+        <div id="othersCommentsList"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1189,9 +1195,44 @@ function openCommentEdit(restaurant) {
   // 已有評論才顯示刪除按鈕
   document.getElementById('commentDeleteBtn').style.display = existingText ? 'inline-flex' : 'none';
 
+  // 顯示其他人對這家店的評論
+  renderOthersComments(restaurant);
+
   document.getElementById('commentEditModal').classList.add('show');
   document.body.style.overflow = 'hidden';
   setTimeout(() => textarea.focus(), 100);
+}
+
+// 在編輯 modal 顯示其他人的評論（排除自己）
+function renderOthersComments(restaurant) {
+  const section = document.getElementById('othersCommentsSection');
+  const list = document.getElementById('othersCommentsList');
+  const title = document.getElementById('othersCommentsTitle');
+  if (!section || !list || !title) return;
+
+  const all = commentsCache[restaurant] || [];
+  const others = all.filter(c => c.person !== myName);
+
+  if (others.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  title.textContent = `其他人的評論（${others.length}）`;
+
+  const escapeHTML = (s) => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  list.innerHTML = others.map(c => `
+    <div class="comment-item">
+      <div class="comment-meta">
+        <span class="comment-author">${escapeHTML(c.person)}</span>
+        <span class="comment-date">${c.updated_at || ''}</span>
+      </div>
+      <div class="comment-text">${escapeHTML(c.comment)}</div>
+    </div>
+  `).join('');
 }
 
 function closeCommentEdit(e) {
