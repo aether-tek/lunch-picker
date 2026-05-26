@@ -319,12 +319,12 @@
     display: flex; align-items: center; gap: 10px;
     padding: 12px 14px; margin-bottom: 6px;
     background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 8px; cursor: grab;
+    border-radius: 8px;
     transition: background .15s, transform .1s, box-shadow .15s;
     user-select: none;
-    touch-action: none; /* SortableJS 在 iOS 拖曳必須 */
+    /* 預設允許垂直捲動，只在把手才會被 SortableJS 攔下來做拖曳 */
+    touch-action: pan-y;
   }
-  .pref-row:active { cursor: grabbing; }
   .pref-row.sortable-ghost {
     opacity: .35; background: var(--bg);
   }
@@ -333,7 +333,6 @@
     transform: scale(1.02);
   }
   .pref-row.sortable-drag {
-    cursor: grabbing;
     box-shadow: 0 8px 24px rgba(0,0,0,.6);
   }
   .pref-rank {
@@ -345,9 +344,26 @@
   .pref-row.top3 .pref-rank { color: var(--gold); font-size: 18px; }
   .pref-row.top10 .pref-rank { color: #c0a050; }
   .pref-name { flex: 1; font-size: 14px; }
+  /* 把手是唯一能觸發拖曳的區域 — 做大一點、視覺更明顯方便手指點 */
   .pref-handle {
-    flex-shrink: 0; color: var(--muted); font-size: 18px;
-    padding: 4px 6px;
+    flex-shrink: 0;
+    color: var(--muted); font-size: 20px;
+    padding: 8px 10px;          /* 比之前大，手指更容易精準點到 */
+    margin-right: -4px;          /* 視覺上靠右一點 */
+    cursor: grab;
+    touch-action: none;          /* 把手禁止捲動，讓 SortableJS 接管 */
+    border-radius: 6px;
+    transition: background .15s, color .15s;
+    line-height: 1;
+    user-select: none;
+  }
+  .pref-handle:hover {
+    color: var(--gold);
+    background: rgba(212, 165, 60, .1);
+  }
+  .pref-handle:active {
+    cursor: grabbing;
+    background: rgba(212, 165, 60, .2);
   }
 
   /* 儲存按鈕（取代原本的儲存指示器） */
@@ -688,7 +704,7 @@
             </button>
           </div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:12px" id="prefsHint">
-            長按並拖曳調整順序 · 拖完記得按「儲存」
+            從右側 ≡ 把手拖曳調整順序 · 拖完記得按「儲存」
           </div>
           <div id="prefLockBanner" class="pref-lock-banner" style="display:none"></div>
           <div id="prefsList">
@@ -1576,9 +1592,8 @@ function initSortable() {
   if (sortableInstance) sortableInstance.destroy();
   sortableInstance = Sortable.create(el, {
     animation: 200,
-    delay: 150,           // 長按 150ms 才觸發拖曳（避免不小心滑動就觸發）
-    delayOnTouchOnly: true, // 只在觸控時用 delay，桌面滑鼠拖曳立即
-    touchStartThreshold: 5,
+    handle: '.pref-handle',  // 只有點 ≡ 把手才能拖，其他區域照常捲動
+    // 既然必須點精準的把手才會觸發，就不需要 delay 了，反應立刻
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
@@ -1650,7 +1665,7 @@ function updateSaveButton() {
     txt.textContent = '已儲存';
     if (hint) {
       hint.classList.remove('dirty');
-      hint.textContent = '長按並拖曳調整順序 · 拖完記得按「儲存」';
+      hint.textContent = '從右側 ≡ 把手拖曳調整順序 · 拖完記得按「儲存」';
     }
   }
 }
