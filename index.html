@@ -708,7 +708,7 @@
         </div>
       </div>
       <div id="prefsContent" style="display:none">
-        <div class="card">
+        <div class="card" id="addRestCard">
           <div class="card-title">新增餐廳到候選清單</div>
           <div class="add-row">
             <input type="text" id="newRestInput" placeholder="餐廳名稱..." maxlength="30">
@@ -716,7 +716,24 @@
           </div>
         </div>
 
-        <div class="card">
+        <!-- Admin 專用：今日延長調整控制 -->
+        <div class="card" id="adminPrefCard" style="display:none;border-color:#8a6020">
+          <div class="card-title" style="display:flex;align-items:center;gap:6px">
+            🛡️ Admin 控制
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+            開啟後，今日所有人在 12:00 後仍可調整偏好（不影響今日決策的公平性，僅作為臨時例外）。隔天 0:00 自動失效。
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font-size:14px;font-weight:600" id="adminOverrideLabel">12:00 後鎖定中</div>
+              <div style="font-size:11px;color:var(--muted)" id="adminOverrideSub">未啟用今日延長</div>
+            </div>
+            <button class="toggle-switch" id="adminOverrideSwitch" onclick="toggleAdminOverride()"></button>
+          </div>
+        </div>
+
+        <div class="card" id="myRankCard">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px">
             <div class="card-title" style="margin:0">我的餐廳排名</div>
             <button class="btn btn-sm" id="prefsSaveBtn" onclick="savePrefsNow()"
@@ -1395,25 +1412,53 @@ async function confirmName() {
   if (!name) return showToast('請輸入名字', 'error');
   myName = name;
   localStorage.setItem('lunchName', name);
+  // 切換使用者 → 清空所有跟舊使用者相關的記憶體狀態
+  resetUserState();
   showNameDisplay();
   await refreshAttendance();
+  // 若目前在偏好頁，重新載入以套用新使用者的介面（個人 vs admin）
+  if (currentTab === 'prefs') {
+    await loadMyPrefs();
+  }
 }
 
 function changeName() {
   myName = '';
   localStorage.removeItem('lunchName');
-  attendanceLoaded = false;
-  attending = false;
+  resetUserState();
   document.getElementById('nameDisplay').style.display = 'none';
   document.getElementById('nameInput').style.display = 'block';
   document.getElementById('attendCard').style.display = 'none';
   document.getElementById('nameField').value = '';
 }
 
+// 切換使用者時，把所有跟舊使用者相關的本地狀態清空
+function resetUserState() {
+  attendanceLoaded = false;
+  attending = false;
+  myPrefs = {};
+  orderedPrefs = [];
+  prefsDirty = false;
+  // 偏好頁 UI 也清掉，避免上個使用者的清單還顯示著
+  const prefsList = document.getElementById('prefsList');
+  if (prefsList) prefsList.innerHTML = '';
+  const banner = document.getElementById('prefLockBanner');
+  if (banner) banner.style.display = 'none';
+  // 隱藏 admin 卡片（下次 loadMyPrefs 會根據新身分重新顯示）
+  const adminCard = document.getElementById('adminPrefCard');
+  if (adminCard) adminCard.style.display = 'none';
+  // 還原可能被 admin 模式隱藏的卡片
+  const addRestCard = document.getElementById('addRestCard');
+  const myRankCard = document.getElementById('myRankCard');
+  if (addRestCard) addRestCard.style.display = '';
+  if (myRankCard) myRankCard.style.display = '';
+}
+
 async function refreshAttendance() {
   try {
     const data = await apiGet({ action: 'getAttendance' });
-    attending = data[myName] || false;
+    // Admin 不參與出席，本地 attending 一律設為 false
+    attending = isAdminUser() ? false : (data[myName] || false);
     updateToggleUI();
     updatePeopleList(data);
   } catch(e) {
@@ -1441,16 +1486,34 @@ function updatePeopleList(data) {
     ? '<span style="color:var(--muted);font-size:13px">還沒有人加入</span>'
     : attendees.map(p => `<span class="chip ${p === myName ? 'me' : ''}">${p}</span>`).join('');
 
+  const adminMode = isAdminUser();
+
   if (todayLockedRest) {
     // 鎖定狀態：隱藏切換 UI，顯示鎖定卡
     document.getElementById('attendCard').style.display = 'none';
     document.getElementById('attendLockedCard').style.display = 'block';
     document.getElementById('attendLockedRest').textContent = todayLockedRest;
     document.getElementById('attendLockedPeople').innerHTML = chipsHTML;
+  } else if (adminMode) {
+    // Admin 模式：隱藏「我要出席」切換，但顯示「今天一起吃的人」
+    document.getElementById('attendCard').style.display = 'block';
+    document.getElementById('attendLockedCard').style.display = 'none';
+    // 把切換 UI 隱掉
+    const toggleEl = document.getElementById('attendToggle');
+    if (toggleEl) toggleEl.style.display = 'none';
+    // 卡片標題改寫
+    document.getElementById('todayPeople').innerHTML = chipsHTML;
+    const titleEl = document.querySelector('#attendCard .card-title');
+    if (titleEl) titleEl.textContent = '今天一起吃的人（admin 模式）';
   } else {
     // 正常狀態
     document.getElementById('attendCard').style.display = 'block';
     document.getElementById('attendLockedCard').style.display = 'none';
+    // 還原切換 UI
+    const toggleEl = document.getElementById('attendToggle');
+    if (toggleEl) toggleEl.style.display = '';
+    const titleEl = document.querySelector('#attendCard .card-title');
+    if (titleEl) titleEl.textContent = '今日出席狀態';
     document.getElementById('todayPeople').innerHTML = chipsHTML;
   }
 }
@@ -1468,6 +1531,7 @@ function updateToggleUI() {
 
 async function toggleAttend() {
   if (!myName) return showToast('請先輸入名字', 'error');
+  if (isAdminUser()) return; // admin 不參與出席
   // 鎖定狀態：拒絕切換
   if (todayLockedRest) {
     showToast('今日午餐已記錄，出席無法再變動', 'error');
@@ -1533,6 +1597,17 @@ function updateRecordButton() {
 
 async function loadMyPrefs() {
   const el = document.getElementById('prefsList');
+
+  // Admin 模式：不需要載入個人偏好，只撈 lockStatus 控制 admin 卡片
+  if (isAdminUser()) {
+    try {
+      const lockStatus = await apiGet({ action: 'getPrefLockStatus' }).catch(() => ({ locked: false, cutoffHour: 12, cutoffMin: 0 }));
+      prefLockStatus = lockStatus || { locked: false, cutoffHour: 12, cutoffMin: 0 };
+    } catch(e) {}
+    applyAdminUI();
+    return;
+  }
+
   el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
   try {
     const [prefs, comments, lockStatus] = await Promise.all([
@@ -1548,9 +1623,66 @@ async function loadMyPrefs() {
     renderPrefsList();
     initSortable();
     applyPrefLockUI();
+    applyAdminUI();
     markPrefsClean(); // 載入完成 = 乾淨狀態
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
+  }
+}
+
+function isAdminUser() {
+  return (myName || '').trim().toLowerCase() === 'admin';
+}
+
+// 顯示/隱藏 admin 卡片並同步 toggle 狀態，admin 時也隱藏個人偏好相關 UI
+function applyAdminUI() {
+  const isAdmin = isAdminUser();
+
+  // 偏好頁的個人元素：admin 不該看到
+  const addRestCard = document.getElementById('addRestCard');
+  const myRankCard = document.getElementById('myRankCard');
+  if (addRestCard) addRestCard.style.display = isAdmin ? 'none' : '';
+  if (myRankCard) myRankCard.style.display = isAdmin ? 'none' : '';
+
+  // Admin 控制卡：只有 admin 看得到
+  const card = document.getElementById('adminPrefCard');
+  if (card) card.style.display = isAdmin ? 'block' : 'none';
+
+  if (!isAdmin) return;
+
+  const sw = document.getElementById('adminOverrideSwitch');
+  const label = document.getElementById('adminOverrideLabel');
+  const sub = document.getElementById('adminOverrideSub');
+  const on = !!prefLockStatus.adminOverride;
+  sw.classList.toggle('on', on);
+  if (on) {
+    label.textContent = '✅ 今日延長已開啟';
+    sub.textContent = '所有人 12:00 後仍可調整偏好（隔天自動失效）';
+  } else {
+    label.textContent = '12:00 後鎖定中';
+    sub.textContent = '未啟用今日延長';
+  }
+}
+
+async function toggleAdminOverride() {
+  if (!isAdminUser()) return;
+  const currentlyOn = !!prefLockStatus.adminOverride;
+  try {
+    const action = currentlyOn ? 'disableAdminOverride' : 'enableAdminOverride';
+    const res = await apiPost({ action });
+    if (res.success) {
+      prefLockStatus.adminOverride = !currentlyOn;
+      // 重新撈完整狀態（避免本地狀態不同步）
+      const fresh = await apiGet({ action: 'getPrefLockStatus' }).catch(() => null);
+      if (fresh) prefLockStatus = fresh;
+      applyAdminUI();
+      applyPrefLockUI();
+      showToast(currentlyOn ? '已關閉延長調整' : '已開啟今日延長調整 🔓', 'success');
+    } else {
+      showToast(res.error || '切換失敗', 'error');
+    }
+  } catch(e) {
+    showToast('切換失敗', 'error');
   }
 }
 
@@ -1569,9 +1701,9 @@ function applyPrefLockUI() {
   const browserMin = browserNow.getMinutes();
   const browserPastCutoff = (browserHour > prefLockStatus.cutoffHour) ||
     (browserHour === prefLockStatus.cutoffHour && browserMin >= prefLockStatus.cutoffMin);
-  // 注意：如果今日已記錄，不管時間都不該鎖
+  // 不該鎖的情況：今日已記錄午餐 OR admin override 啟用
   const shouldLock = prefLockStatus.locked ||
-    (browserPastCutoff && !prefLockStatus.todayLogged);
+    (browserPastCutoff && !prefLockStatus.todayLogged && !prefLockStatus.adminOverride);
 
   if (shouldLock) {
     banner.style.display = 'block';
