@@ -505,6 +505,32 @@
   #toast.success { border-color: var(--green); color: var(--green); }
   #toast.error { border-color: var(--danger); color: var(--danger); }
 
+  /* ── 版本 footer ── */
+  .version-footer {
+    text-align: center;
+    padding: 16px 0 24px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: .5;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: .5px;
+    transition: opacity .15s, color .3s, transform .15s;
+  }
+  .version-footer:hover { opacity: 1; }
+  .version-footer:active { transform: scale(.95); }
+  /* 部署完成時：金色閃爍 */
+  .version-footer.updated {
+    color: var(--gold);
+    opacity: 1;
+    animation: version-pulse 2s ease-in-out 2;
+  }
+  @keyframes version-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
   /* ── Section label ── */
   .section-label {
     font-size: 12px; color: var(--muted); letter-spacing: 1px;
@@ -777,6 +803,11 @@
       </div>
     </div>
 
+    <!-- 版本指紋（部署完成時短暫閃金色） -->
+    <div id="versionFooter" class="version-footer" onclick="copyVersionInfo()" title="點擊複製版本資訊">
+      <span id="versionHash">······</span>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /app -->
 
@@ -954,6 +985,53 @@ async function init() {
   await loadRestaurants();
   loadRanking();
   if (myName) showNameDisplay();
+  initVersionHash();
+}
+
+// ══════════════════════════════════════════════
+// 版本指紋（6 位 hash + 部署偵測閃光）
+// ══════════════════════════════════════════════
+const VERSION_STORAGE_KEY = 'lunchAppVersionHash';
+
+// FNV-1a 32-bit hash，快速且分佈均勻；輸出 6 位 hex
+function computeContentHash(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  // 取後 6 碼當指紋
+  return h.toString(16).padStart(8, '0').slice(-6);
+}
+
+function initVersionHash() {
+  const footer = document.getElementById('versionFooter');
+  const span = document.getElementById('versionHash');
+  if (!footer || !span) return;
+
+  // 對整個 HTML 算 hash（含 inline script & css，足以反映任何前端變更）
+  const hash = computeContentHash(document.documentElement.outerHTML);
+  span.textContent = '#' + hash;
+
+  // 跟 localStorage 比對：不同代表有新部署
+  const lastSeen = localStorage.getItem(VERSION_STORAGE_KEY);
+  if (lastSeen && lastSeen !== hash) {
+    // 短暫閃金色提示
+    footer.classList.add('updated');
+    setTimeout(() => footer.classList.remove('updated'), 5000);
+  }
+  localStorage.setItem(VERSION_STORAGE_KEY, hash);
+}
+
+// 點版本號 → 複製到剪貼簿（方便回報問題）
+async function copyVersionInfo() {
+  const hash = document.getElementById('versionHash').textContent;
+  try {
+    await navigator.clipboard.writeText(hash);
+    showToast(`已複製版本：${hash}`, 'success');
+  } catch(e) {
+    showToast(hash, '');
+  }
 }
 
 // ══════════════════════════════════════════════
