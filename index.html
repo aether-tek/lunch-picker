@@ -988,18 +988,18 @@ async function loadRanking() {
   const el = document.getElementById('rankingContent');
   el.innerHTML = '<div class="loading"><div class="spinner"></div>計算中...</div>';
   try {
-    // 並行載入：排名、評論、歷史（為了判斷今天是否已記錄）
-    const [data, comments, history] = await Promise.all([
-      apiGet({ action: 'getRanking' }),
-      apiGet({ action: 'getComments' }).catch(() => ({})),
-      apiGet({ action: 'getHistory' }).catch(() => ({}))
-    ]);
+    // 用合併 API 一次撈完所有需要的資料（比 3 個並行請求快約 0.5-1 秒）
+    const bundle = await apiGet({ action: 'getRankingPageData' });
+    const data = bundle.ranking || { participants: [], ranking: [] };
+    const comments = bundle.comments || {};
+    const history = bundle.history || {};
+
     rankingData = data;
-    commentsCache = comments || {};
+    commentsCache = comments;
     // 用本地時區算今日字串，與後端對齊
     const dt = new Date();
     const todayDs = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-    todayLockedRest = (history && history[todayDs]) || null;
+    todayLockedRest = history[todayDs] || null;
     renderRanking(data);
   } catch(e) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">無法連線，請確認網址設定</div></div>';
