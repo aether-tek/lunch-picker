@@ -422,6 +422,27 @@
   }
   #prefsHint.dirty { color: var(--gold); }
 
+  /* 數字步進按鈕（admin 控制用） */
+  .num-step-btn {
+    flex-shrink: 0;
+    width: 36px; height: 36px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-size: 18px; font-weight: 700; cursor: pointer;
+    transition: all .15s;
+    line-height: 1;
+    user-select: none;
+  }
+  .num-step-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .num-step-btn:active { transform: scale(.92); }
+  .num-step-btn:disabled { opacity: .4; cursor: not-allowed; }
+  /* 隱藏 number input 的瀏覽器原生 spinner */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  input[type="number"] { -moz-appearance: textfield; }
+
   /* 偏好鎖定提示 */
   .pref-lock-banner {
     background: #2a1a1a; border: 1px solid #4a2a2a;
@@ -748,7 +769,7 @@
             🛡️ Admin 控制
           </div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
-            開啟後，今日所有人在 12:00 後仍可調整偏好（不影響今日決策的公平性，僅作為臨時例外）。隔天 0:00 自動失效。
+            開啟後，今日所有人在 12:00 後仍可調整偏好（不影響今日決策的公平性,僅作為臨時例外）。隔天 0:00 自動失效。
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
             <div>
@@ -757,6 +778,23 @@
             </div>
             <button class="toggle-switch" id="adminOverrideSwitch" onclick="toggleAdminOverride()"></button>
           </div>
+
+          <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">不重複過濾天數</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+            最近 N 個上班日內吃過的店不會出現在排名（範圍 3~20）。改動後對所有人立即生效。
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="num-step-btn" onclick="adjustExcludeDays(-1)">−</button>
+            <input type="number" id="excludeDaysInput" min="3" max="20" value="7"
+              oninput="onExcludeDaysInput()"
+              style="flex:1;text-align:center;font-size:18px;font-weight:700;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-variant-numeric:tabular-nums">
+            <button class="num-step-btn" onclick="adjustExcludeDays(+1)">+</button>
+            <button class="btn btn-secondary" id="excludeDaysApplyBtn" onclick="applyExcludeDays()"
+              disabled style="font-size:13px;padding:8px 14px;min-width:64px">套用</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center" id="excludeDaysStatus">目前：7 個上班日</div>
         </div>
 
         <div class="card" id="myRankCard">
@@ -825,8 +863,8 @@
       <div class="rule-block">
         <div class="rule-block-title"><span class="step-num">1</span> 哪些餐廳會出現</div>
         <div class="rule-block-body">
-          <p>系統會自動把<strong style="color:var(--gold)">最近 7 個上班日</strong>內吃過的餐廳排除掉（週六日不計入）。</p>
-          <p>例如：今天週三，回看過去 7 個上班日（約一週半），這段期間吃過的店都不會出現在排名裡。等過了 7 個上班日後，那家店才會回到候選清單。</p>
+          <p>系統會自動把<strong style="color:var(--gold)">最近 <span class="modal-exclude-days">7</span> 個上班日</strong>內吃過的餐廳排除掉（週六日不計入）。</p>
+          <p>例如：今天週三，回看過去 <span class="modal-exclude-days">7</span> 個上班日，這段期間吃過的店都不會出現在排名裡。等過了 <span class="modal-exclude-days">7</span> 個上班日後，那家店才會回到候選清單。</p>
           <p style="color:var(--muted);font-size:12px">→ 被排除的餐廳會列在排名最下方的「最近吃過」區塊裡，方便大家確認。</p>
         </div>
       </div>
@@ -875,7 +913,7 @@
         <div class="rule-block-title"><span class="step-num">4</span> 排名規則總結</div>
         <div class="rule-block-body">
           <p>📊 <strong>平均分高的排前面</strong>。</p>
-          <p>🍱 <strong>7 個上班日內吃過的店一律不顯示</strong>（硬性過濾）。</p>
+          <p>🍱 <strong><span class="modal-exclude-days">7</span> 個上班日內吃過的店一律不顯示</strong>（硬性過濾）。</p>
           <p>✅ <strong>所有出席者都必須拖曳完成個人排名</strong>，缺一不可。</p>
           <p>🔒 <strong>每日 12:00 後個人偏好鎖定</strong>，避免影響當日決策的公平性。但若已在「歷史」頁記錄今日午餐，會自動解鎖讓你可以開始調整明天的偏好。隔天 0:00 也會自動解鎖。</p>
         </div>
@@ -1158,10 +1196,11 @@ function renderRanking(data) {
       </div>`;
   }).join('');
 
-  // 被「7 個上班日不重複」規則排除的店
+  // 被「N 個上班日不重複」規則排除的店（N 從後端回傳的 excludeDays 取得）
+  const excludeN = data.excludeDays || 7;
   const excludedSection = (data.excluded && data.excluded.length > 0)
     ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-         <div class="card-title" style="margin-bottom:6px">最近 7 個上班日已吃過（不列入）</div>
+         <div class="card-title" style="margin-bottom:6px">最近 ${excludeN} 個上班日已吃過（不列入）</div>
          <div class="chips">${data.excluded.map(r => `<span class="chip">${r}</span>`).join('')}</div>
        </div>`
     : '';
@@ -1200,9 +1239,10 @@ function renderLockedRanking(data) {
     : '';
 
   // 被排除清單
+  const lockedExcludeN = data.excludeDays || 7;
   const excludedSection = (data.excluded && data.excluded.length > 0)
     ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-         <div class="card-title" style="margin-bottom:6px">最近 7 個上班日已吃過</div>
+         <div class="card-title" style="margin-bottom:6px">最近 ${lockedExcludeN} 個上班日已吃過</div>
          <div class="chips">${data.excluded.map(r => `<span class="chip">${escapeHTML(r)}</span>`).join('')}</div>
        </div>`
     : '';
@@ -1445,6 +1485,12 @@ function refreshPrefsCommentButtons() {
 // 演算法說明 modal
 // ══════════════════════════════════════════════
 function openHowItWorks() {
+  // 把 modal 內的「7 個上班日」替換成當前實際值
+  // 優先順序：排名 data > prefLockStatus > 預設 7
+  const days = (rankingData && rankingData.excludeDays) || prefLockStatus.excludeDays || 7;
+  document.querySelectorAll('.modal-exclude-days').forEach(el => {
+    el.textContent = days;
+  });
   document.getElementById('howItWorksModal').classList.add('show');
   document.body.style.overflow = 'hidden';
 }
@@ -1739,6 +1785,78 @@ function applyAdminUI() {
   } else {
     label.textContent = '12:00 後鎖定中';
     sub.textContent = '未啟用今日延長';
+  }
+
+  // 同步「不重複過濾天數」input 跟現況
+  syncExcludeDaysUI();
+}
+
+// ──「不重複過濾天數」管理 ──────────────────────────────
+function syncExcludeDaysUI() {
+  const input = document.getElementById('excludeDaysInput');
+  const status = document.getElementById('excludeDaysStatus');
+  const applyBtn = document.getElementById('excludeDaysApplyBtn');
+  if (!input || !status || !applyBtn) return;
+  const current = prefLockStatus.excludeDays || 7;
+  const min = prefLockStatus.excludeDaysMin || 3;
+  const max = prefLockStatus.excludeDaysMax || 20;
+  input.min = min;
+  input.max = max;
+  input.value = current;
+  status.textContent = `目前：${current} 個上班日`;
+  applyBtn.disabled = true; // 預設無修改 → 不能套用
+}
+
+function clampExcludeDays(v) {
+  const min = prefLockStatus.excludeDaysMin || 3;
+  const max = prefLockStatus.excludeDaysMax || 20;
+  if (isNaN(v)) v = prefLockStatus.excludeDays || 7;
+  return Math.max(min, Math.min(max, v));
+}
+
+function adjustExcludeDays(delta) {
+  const input = document.getElementById('excludeDaysInput');
+  if (!input) return;
+  const cur = parseInt(input.value, 10) || (prefLockStatus.excludeDays || 7);
+  input.value = clampExcludeDays(cur + delta);
+  onExcludeDaysInput();
+}
+
+function onExcludeDaysInput() {
+  const input = document.getElementById('excludeDaysInput');
+  const applyBtn = document.getElementById('excludeDaysApplyBtn');
+  if (!input || !applyBtn) return;
+  const newVal = clampExcludeDays(parseInt(input.value, 10));
+  // 顯示 clamped 結果
+  if (String(newVal) !== input.value) input.value = newVal;
+  // 跟伺服器目前值比較
+  applyBtn.disabled = (newVal === prefLockStatus.excludeDays);
+}
+
+async function applyExcludeDays() {
+  if (!isAdminUser()) return;
+  const input = document.getElementById('excludeDaysInput');
+  const applyBtn = document.getElementById('excludeDaysApplyBtn');
+  const newVal = clampExcludeDays(parseInt(input.value, 10));
+  if (newVal === prefLockStatus.excludeDays) return;
+
+  applyBtn.disabled = true;
+  applyBtn.textContent = '...';
+  try {
+    const res = await apiPost({ action: 'setExcludeWorkdays', days: newVal });
+    if (res.success) {
+      prefLockStatus.excludeDays = res.days;
+      syncExcludeDaysUI();
+      showToast(`已套用：最近 ${res.days} 個上班日不重複`, 'success');
+    } else {
+      showToast(res.error || '套用失敗', 'error');
+      applyBtn.disabled = false;
+    }
+  } catch(e) {
+    showToast('套用失敗', 'error');
+    applyBtn.disabled = false;
+  } finally {
+    applyBtn.textContent = '套用';
   }
 }
 
