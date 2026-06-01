@@ -1047,8 +1047,15 @@ function initVersionHash() {
   const span = document.getElementById('versionHash');
   if (!footer || !span) return;
 
-  // 對整個 HTML 算 hash（含 inline script & css，足以反映任何前端變更）
-  const hash = computeContentHash(document.documentElement.outerHTML);
+  // 只對「程式碼本身」算 hash（script + style 標籤的內容），不對整個 outerHTML 算。
+  // 原因：outerHTML 會包含當下 DOM 狀態，使用者切換 admin / 一般使用者會改變 DOM，
+  //      導致同一份程式碼在不同身分下算出不同 hash。
+  let sourceParts = [];
+  document.querySelectorAll('script, style').forEach(el => {
+    sourceParts.push(el.textContent || '');
+  });
+  const source = sourceParts.join('\n');
+  const hash = computeContentHash(source);
   span.textContent = '#' + hash;
 
   // 跟 localStorage 比對：不同代表有新部署
