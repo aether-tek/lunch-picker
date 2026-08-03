@@ -1018,7 +1018,87 @@ async function apiPost(body) {
     body: JSON.stringify(body),
     redirect: 'follow'
   });
-  return res.json();
+  const result = await res.json();
+  // 寫入操作完成 → 清空所有 SWR 快取，下次讀 GET 一定拿到最新資料
+  // 只有真的 success 才清，避免失敗還把好快取砍掉
+  if (result && result.success !== false) {
+    invalidateSWR();
+  }
+  return result;
+}
+
+// ══════════════════════════════════════════════
+// Stale-While-Revalidate 快取層
+// 呼叫 apiGetSWR(params, onFresh) 時：
+//   1. 若 sessionStorage 有快取 → 立刻回傳快取（同步感）
+//   2. 背景重新打 API 拿最新資料 → 存回快取 → 呼叫 onFresh(fresh, changed)
+// 使用者體感：切回頁面幾乎秒開，稍後畫面會自動同步到最新
+// ══════════════════════════════════════════════
+const SWR_PREFIX = 'lunchSWR:';
+
+function _swrKey(params) {
+  const sorted = Object.keys(params).sort().map(k => k + '=' + params[k]).join('&');
+  return SWR_PREFIX + sorted;
+}
+
+function _swrGetCache(key) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function _swrSetCache(key, data) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(data));
+  } catch(e) { /* quota exceeded 等錯誤忽略 */ }
+}
+
+/**
+ * SWR 版本的 apiGet：立刻回傳快取（若有），背景更新後透過 onFresh 通知。
+ * @param {Object} params - API 參數
+ * @param {Function} [onFresh] - 拿到新資料後的 callback。第二參數 changed:bool 標示是否跟舊資料不同
+ * @returns {Promise<any>} 快取資料（若有）或第一次的 API 資料
+ */
+async function apiGetSWR(params, onFresh) {
+  const key = _swrKey(params);
+  const cached = _swrGetCache(key);
+  const cachedJSON = cached ? JSON.stringify(cached) : null;
+
+  // 背景更新（不阻塞）
+  const revalidate = (async () => {
+    try {
+      const fresh = await apiGet(params);
+      _swrSetCache(key, fresh);
+      const changed = JSON.stringify(fresh) !== cachedJSON;
+      if (onFresh) onFresh(fresh, changed);
+      return fresh;
+    } catch(e) {
+      if (!cached && onFresh) onFresh(null, false, e);
+      throw e;
+    }
+  })();
+
+  if (cached) {
+    return cached; // 立刻回傳快取
+  }
+  return revalidate;
+}
+
+// 寫入操作後清掉受影響的快取，避免下次讀到過期資料
+function invalidateSWR(actionOrPredicate) {
+  try {
+    const keys = Object.keys(sessionStorage).filter(k => k.startsWith(SWR_PREFIX));
+    keys.forEach(k => {
+      if (typeof actionOrPredicate === 'string') {
+        if (k.indexOf('action=' + actionOrPredicate) !== -1) sessionStorage.removeItem(k);
+      } else if (typeof actionOrPredicate === 'function') {
+        if (actionOrPredicate(k)) sessionStorage.removeItem(k);
+      } else {
+        sessionStorage.removeItem(k);
+      }
+    });
+  } catch(e) {}
 }
 
 // ══════════════════════════════════════════════
@@ -1135,23 +1215,39 @@ function switchTab(tab) {
 // ══════════════════════════════════════════════
 async function loadRanking() {
   const el = document.getElementById('rankingContent');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div>計算中...</div>';
-  try {
-    // 用合併 API 一次撈完所有需要的資料（比 3 個並行請求快約 0.5-1 秒）
-    const bundle = await apiGet({ action: 'getRankingPageData' });
+
+  const applyBundle = (bundle) => {
+    if (!bundle) return;
     const data = bundle.ranking || { participants: [], ranking: [] };
     const comments = bundle.comments || {};
     const history = bundle.history || {};
-
     rankingData = data;
     commentsCache = comments;
-    // 用本地時區算今日字串，與後端對齊
     const dt = new Date();
     const todayDs = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
     todayLockedRest = history[todayDs] || null;
     renderRanking(data);
+  };
+
+  // 沒快取才顯示 spinner，避免快取秒開後又閃 spinner
+  const hasCached = _swrGetCache(_swrKey({ action: 'getRankingPageData' }));
+  if (!hasCached) {
+    el.innerHTML = '<div class="loading"><div class="spinner"></div>計算中...</div>';
+  }
+
+  try {
+    // SWR：先秒開快取（若有），背景更新後自動 re-render
+    const bundle = await apiGetSWR(
+      { action: 'getRankingPageData' },
+      (fresh, changed) => {
+        if (fresh && changed) applyBundle(fresh);
+      }
+    );
+    applyBundle(bundle);
   } catch(e) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">無法連線，請確認網址設定</div></div>';
+    if (!hasCached) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">無法連線，請確認網址設定</div></div>';
+    }
   }
 }
 
@@ -2210,54 +2306,43 @@ async function addRestaurant() {
 // ══════════════════════════════════════════════
 async function loadHistoryPage() {
   const el = document.getElementById('historyList');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
-  try {
-    const history = await apiGet({ action: 'getHistory' });
-    const DAYS = ['日','一','二','三','四','五','六'];
+  const DAYS = ['日','一','二','三','四','五','六'];
+  const todayDt = new Date();
+  const todayDs = `${todayDt.getFullYear()}-${String(todayDt.getMonth()+1).padStart(2,'0')}-${String(todayDt.getDate()).padStart(2,'0')}`;
 
-    // 今天的日期字串（用本地時區，與後端對齊）
-    const todayDt = new Date();
-    const todayDs = `${todayDt.getFullYear()}-${String(todayDt.getMonth()+1).padStart(2,'0')}-${String(todayDt.getDate()).padStart(2,'0')}`;
-
-    // 取得所有有紀錄的日期，從新到舊排序
+  // 把 history 資料渲染成畫面的內部函式
+  const render = (history) => {
     const allDates = Object.keys(history)
-      .filter(ds => history[ds]) // 過濾掉空值
-      .sort((a, b) => b.localeCompare(a)); // 新 → 舊
+      .filter(ds => history[ds])
+      .sort((a, b) => b.localeCompare(a));
 
     let todayRecord = history[todayDs] || null;
-
-    // 如果今天還沒紀錄，但 allDates 裡也沒有今天 → 額外加一筆「今天 —」放在最前面
     const hasToday = allDates.includes(todayDs);
     if (!hasToday) allDates.unshift(todayDs);
 
     if (allDates.length === 0 || (allDates.length === 1 && !history[todayDs])) {
-      // 完全沒紀錄
       el.innerHTML = '<div style="color:var(--muted);padding:12px;text-align:center">尚無用餐紀錄</div>';
       rebuildHistorySelect(null);
       return;
     }
 
-    // 依月份分組（YYYY-MM）
     const byMonth = {};
     allDates.forEach(ds => {
-      const monthKey = ds.substring(0, 7); // "2026-05"
+      const monthKey = ds.substring(0, 7);
       if (!byMonth[monthKey]) byMonth[monthKey] = [];
       byMonth[monthKey].push(ds);
     });
 
-    // 算「N 天前」的工具
     const daysAgo = (ds) => {
       const dt = new Date(ds + 'T00:00:00');
       const today = new Date(todayDs + 'T00:00:00');
       return Math.round((today - dt) / 86400000);
     };
 
-    // 渲染：依月份從新到舊
     const sortedMonths = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
     const html = sortedMonths.map(monthKey => {
       const [year, month] = monthKey.split('-');
       const dates = byMonth[monthKey];
-      // 該月實際有紀錄的天數（不含今天無紀錄的佔位）
       const recordedCount = dates.filter(ds => history[ds]).length;
 
       const items = dates.map(ds => {
@@ -2296,8 +2381,24 @@ async function loadHistoryPage() {
 
     el.innerHTML = html;
     rebuildHistorySelect(todayRecord);
+  };
+
+  // 沒快取才顯示 spinner
+  const hasCached = _swrGetCache(_swrKey({ action: 'getHistory' }));
+  if (!hasCached) {
+    el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
+  }
+
+  try {
+    const history = await apiGetSWR(
+      { action: 'getHistory' },
+      (fresh, changed) => { if (fresh && changed) render(fresh); }
+    );
+    render(history);
   } catch(e) {
-    el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
+    if (!hasCached) {
+      el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
+    }
   }
 }
 
