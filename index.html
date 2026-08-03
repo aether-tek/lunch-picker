@@ -977,16 +977,42 @@ let currentTab = 'ranking';
 // ══════════════════════════════════════════════
 // API 工具
 // ══════════════════════════════════════════════
+// Apps Script 部署的 echo URL 有時會偶發 404（Google 平台已知問題）
+// 這個 helper 在失敗時自動 retry 幾次，通常第二次就會成功。
+async function fetchWithRetry(url, options, maxRetries) {
+  maxRetries = maxRetries || 3;
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      // 404 也算失敗要 retry（Apps Script 的 echo URL 偶發失效）
+      if (res.status === 404 && attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 300 * attempt)); // 300ms, 600ms 退避
+        continue;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res;
+    } catch (e) {
+      lastError = e;
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 300 * attempt));
+        continue;
+      }
+    }
+  }
+  throw lastError || new Error('Fetch failed after ' + maxRetries + ' attempts');
+}
+
 async function apiGet(params) {
   const url = new URL(API_URL);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString(), { redirect: 'follow' });
+  const res = await fetchWithRetry(url.toString(), { redirect: 'follow' });
   return res.json();
 }
 
 async function apiPost(body) {
   // 用 text/plain 避免 CORS preflight (OPTIONS)，Apps Script 不支援 OPTIONS
-  const res = await fetch(API_URL, {
+  const res = await fetchWithRetry(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(body),
