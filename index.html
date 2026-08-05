@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0f1117">
 <title>🍱 午餐決策系統</title>
 <style>
@@ -1150,7 +1150,7 @@ function computeContentHash(str) {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
   // 取後 6 碼當指紋
   return h.toString(16).padStart(8, '0').slice(-6);
@@ -1391,7 +1391,7 @@ function renderLockedRanking(data) {
         <div class="comment-item">
           <div class="comment-meta">
             <span class="comment-author">${escapeHTML(c.person)}</span>
-            <span class="comment-date">${c.updated_at || ''}</span>
+            <span class="comment-date">${(c.updated_at || '').slice(0, 10)}</span>
           </div>
           <div class="comment-text">${escapeHTML(c.comment)}</div>
         </div>`).join('');
@@ -1451,7 +1451,7 @@ function renderCommentsForRest(restaurant) {
     <div class="comment-item">
       <div class="comment-meta">
         <span class="comment-author">${escapeHTML(c.person)}</span>
-        <span class="comment-date">${c.updated_at || ''}</span>
+        <span class="comment-date">${(c.updated_at || '').slice(0, 10)}</span>
       </div>
       <div class="comment-text">${escapeHTML(c.comment)}</div>
     </div>
@@ -1521,7 +1521,7 @@ function renderOthersComments(restaurant) {
     <div class="comment-item">
       <div class="comment-meta">
         <span class="comment-author">${escapeHTML(c.person)}</span>
-        <span class="comment-date">${c.updated_at || ''}</span>
+        <span class="comment-date">${(c.updated_at || '').slice(0, 10)}</span>
       </div>
       <div class="comment-text">${escapeHTML(c.comment)}</div>
     </div>
@@ -1886,7 +1886,8 @@ async function loadMyPrefs() {
 
   const params = { action: 'getPrefsPageData', person: myName };
   const hasCached = _swrGetCache(_swrKey(params));
-  if (!hasCached) {
+  // 有未儲存的拖曳（prefsDirty）時不顯示 spinner，以免蓋掉使用者正在拖的畫面
+  if (!hasCached && !prefsDirty) {
     el.innerHTML = '<div class="loading"><div class="spinner"></div>載入中...</div>';
   }
 
@@ -1896,7 +1897,9 @@ async function loadMyPrefs() {
       // 避免蓋掉使用者正在拖曳的狀態
       if (fresh && changed && !prefsDirty) applyBundle(fresh);
     });
-    applyBundle(bundle);
+    // 有未儲存的拖曳順序時，回到偏好頁不要用伺服器資料蓋掉本地順序
+    //（首次載入 prefsDirty 為 false，仍會正常套用）
+    if (!prefsDirty) applyBundle(bundle);
   } catch(e) {
     if (!hasCached) el.innerHTML = '<div style="color:var(--danger)">載入失敗</div>';
   }
