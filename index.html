@@ -1059,6 +1059,7 @@ async function apiPost(body) {
 // 使用者體感：切回頁面幾乎秒開，稍後畫面會自動同步到最新
 // ══════════════════════════════════════════════
 const SWR_PREFIX = 'lunchSWR:';
+const SWR_LS_PREFIX = 'lunchSWRmirror:'; // localStorage 鏡像：跨 session 保留，讓回訪者第一頁秒開
 
 function _swrKey(params) {
   const sorted = Object.keys(params).sort().map(k => k + '=' + params[k]).join('&');
@@ -1068,14 +1069,24 @@ function _swrKey(params) {
 function _swrGetCache(key) {
   try {
     const raw = sessionStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch(e) { return null; }
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  // 冷啟動（sessionStorage 被清空）：從 localStorage 鏡像回填，讓回訪者第一頁不必等後端
+  try {
+    const mirror = localStorage.getItem(SWR_LS_PREFIX + key);
+    if (mirror) {
+      try { sessionStorage.setItem(key, mirror); } catch(e) {}
+      return JSON.parse(mirror);
+    }
+  } catch(e) {}
+  return null;
 }
 
 function _swrSetCache(key, data) {
-  try {
-    sessionStorage.setItem(key, JSON.stringify(data));
-  } catch(e) { /* quota exceeded 等錯誤忽略 */ }
+  const json = JSON.stringify(data);
+  try { sessionStorage.setItem(key, json); } catch(e) { /* quota 忽略 */ }
+  // 同步寫進 localStorage 鏡像（跨 session 保留）；quota 失敗就默默退回只用 session
+  try { localStorage.setItem(SWR_LS_PREFIX + key, json); } catch(e) {}
 }
 
 /**
@@ -1111,17 +1122,19 @@ async function apiGetSWR(params, onFresh) {
 
 // 寫入操作後清掉受影響的快取，避免下次讀到過期資料
 function invalidateSWR(actionOrPredicate) {
+  // 用同一組判斷條件清掉 session 與 localStorage 鏡像，避免寫入後鏡像還留舊值
+  const _match = (k) => {
+    if (typeof actionOrPredicate === 'string') return k.indexOf('action=' + actionOrPredicate) !== -1;
+    if (typeof actionOrPredicate === 'function') return actionOrPredicate(k);
+    return true; // 無參數 → 全清
+  };
   try {
-    const keys = Object.keys(sessionStorage).filter(k => k.startsWith(SWR_PREFIX));
-    keys.forEach(k => {
-      if (typeof actionOrPredicate === 'string') {
-        if (k.indexOf('action=' + actionOrPredicate) !== -1) sessionStorage.removeItem(k);
-      } else if (typeof actionOrPredicate === 'function') {
-        if (actionOrPredicate(k)) sessionStorage.removeItem(k);
-      } else {
-        sessionStorage.removeItem(k);
-      }
-    });
+    Object.keys(sessionStorage).filter(k => k.startsWith(SWR_PREFIX))
+      .forEach(k => { if (_match(k)) sessionStorage.removeItem(k); });
+  } catch(e) {}
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith(SWR_LS_PREFIX))
+      .forEach(k => { if (_match(k.slice(SWR_LS_PREFIX.length))) localStorage.removeItem(k); });
   } catch(e) {}
 }
 
@@ -1150,8 +1163,8 @@ function initDateBadge() {
 
 async function init() {
   initDateBadge();
-  await loadRestaurants();
-  loadRanking();
+  loadRanking();          // 先發可見的排名頁（自己的 SWR bundle，不需要餐廳清單）
+  loadRestaurants();      // 不 await —— 只餵歷史頁下拉與偏好頁，別擋住排名頁
   if (myName) showNameDisplay();
   initVersionHash();
 }
