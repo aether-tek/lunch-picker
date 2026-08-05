@@ -1263,6 +1263,9 @@ async function loadRanking() {
     if (bundle.today) serverToday = bundle.today;
     const todayDs = getTodayDs();
     todayLockedRest = history[todayDs] || null;
+    // 排名 bundle 本來就含 history —— 順手餵進「歷史頁」的 SWR 快取（含 localStorage 鏡像），
+    // 這樣切到歷史頁可直接秒開，不必再打一次 getHistory 往返。
+    if (bundle.history) _swrSetCache(_swrKey({ action: 'getHistory' }), bundle.history);
     renderRanking(data);
   };
 
