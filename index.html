@@ -973,6 +973,22 @@ let prefLockStatus = { locked: false, cutoffHour: 12, cutoffMin: 0 }; // 個人�
 let prefsDirty = false; // 偏好排序是否有未儲存變更
 let rankingData = null;
 let currentTab = 'ranking';
+let serverToday = null; // 後端權威「今天」(yyyy-MM-dd)；避免瀏覽器時區/時鐘誤差
+
+// 取得「今天」日期字串：優先用後端提供的權威值，取不到才退回瀏覽器本地時間
+function getTodayDs() {
+  if (serverToday) return serverToday;
+  const dt = new Date();
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+// 共用：HTML 逸脫（防止餐廳名／人名等使用者輸入造成 XSS）
+// 逸脫 5 個字元 & < > " ' — 可安全用於文字節點與雙引號屬性值
+function escapeHTML(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 // ══════════════════════════════════════════════
 // API 工具
@@ -1231,8 +1247,8 @@ async function loadRanking() {
     const history = bundle.history || {};
     rankingData = data;
     commentsCache = comments;
-    const dt = new Date();
-    const todayDs = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    if (bundle.today) serverToday = bundle.today;
+    const todayDs = getTodayDs();
     todayLockedRest = history[todayDs] || null;
     renderRanking(data);
   };
@@ -1273,19 +1289,19 @@ function renderRanking(data) {
     const isMissingPrefs = data.missingPrefs && data.missingPrefs.length > 0;
     const icon = isMissingPrefs ? '⚠️' : '🍽️';
     const extraHint = isMissingPrefs
-      ? `<br><br><span style="font-size:12px">尚未完成偏好設定者：${data.missingPrefs.map(m => m.person + '（缺 ' + m.missingCount + ' 家）').join('、')}</span>`
+      ? `<br><br><span style="font-size:12px">尚未完成偏好設定者：${data.missingPrefs.map(m => escapeHTML(m.person) + '（缺 ' + m.missingCount + ' 家）').join('、')}</span>`
       : (data.message ? '' : '<br><br>到「出席」頁開啟今日出席');
     el.innerHTML = `
       <div class="empty">
         <div class="empty-icon">${icon}</div>
-        <div class="empty-text">${data.message || '今天還沒有人加入午餐'}${extraHint}</div>
+        <div class="empty-text">${data.message ? escapeHTML(data.message) : '今天還沒有人加入午餐'}${extraHint}</div>
       </div>`;
     return;
   }
 
   const medals = ['🥇','🥈','🥉'];
   const participantChips = data.participants.map(p =>
-    `<span class="chip ${p === myName ? 'me' : ''}">${p}${p === myName ? ' (我)' : ''}</span>`
+    `<span class="chip ${p === myName ? 'me' : ''}">${escapeHTML(p)}${p === myName ? ' (我)' : ''}</span>`
   ).join('');
 
   const n = data.participants.length;
@@ -1297,7 +1313,7 @@ function renderRanking(data) {
       const isMe = b.person === myName;
       const cls = isMe ? 'me' : '';
       return `<tr class="${cls}">
-        <td>${b.person}${isMe ? ' (我)' : ''}</td>
+        <td>${escapeHTML(b.person)}${isMe ? ' (我)' : ''}</td>
         <td>第 ${b.rank} 名</td>
         <td class="num">${b.score}</td>
       </tr>`;
@@ -1311,7 +1327,7 @@ function renderRanking(data) {
         <div class="rank-item ${isTop3 ? 'top3' : ''}" onclick="toggleRankDetail(${i})">
           <div class="${isTop3 ? 'rank-medal' : 'rank-num'}">${isTop3 ? medals[i] : '#'+(i+1)}</div>
           <div class="rank-info">
-            <div class="rank-name">${r.restaurant}<span class="rank-expand-icon">▾</span></div>
+            <div class="rank-name">${escapeHTML(r.restaurant)}<span class="rank-expand-icon">▾</span></div>
             <div class="rank-detail">平均 ${r.avgScore} 分</div>
           </div>
           <div class="rank-score">${r.finalScore}</div>
@@ -1338,7 +1354,7 @@ function renderRanking(data) {
   const excludedSection = (data.excluded && data.excluded.length > 0)
     ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
          <div class="card-title" style="margin-bottom:6px">最近 ${excludeN} 個上班日已吃過（不列入）</div>
-         <div class="chips">${data.excluded.map(r => `<span class="chip">${r}</span>`).join('')}</div>
+         <div class="chips">${data.excluded.map(r => `<span class="chip">${escapeHTML(r)}</span>`).join('')}</div>
        </div>`
     : '';
 
@@ -1359,9 +1375,12 @@ function renderRanking(data) {
 function renderLockedRanking(data) {
   const el = document.getElementById('rankingContent');
   const rest = todayLockedRest;
-  const escapeHTML = (s) => String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const safeRest = rest.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  // 供 onclick 內嵌 JS 字串用的 safeRest：先跳脫反斜線→單引號→再 HTML，
+  // 堵掉 \' 與 &#39; 兩種繞過（renderLockedRanking 的文字沿用全域 escapeHTML）
+  const safeRest = rest
+    .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   // 評論統計
   const list = commentsCache[rest] || [];
@@ -1437,9 +1456,6 @@ function toggleRankDetail(idx) {
 // 渲染某餐廳的評論清單（用於排名頁明細展開）
 function renderCommentsForRest(restaurant) {
   const list = commentsCache[restaurant] || [];
-  const escapeHTML = (s) => String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   if (list.length === 0) {
     return `
       <div class="comments-section">
@@ -1514,9 +1530,6 @@ function renderOthersComments(restaurant) {
   section.style.display = 'block';
   title.textContent = `其他人的評論（${others.length}）`;
 
-  const escapeHTML = (s) => String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   list.innerHTML = others.map(c => `
     <div class="comment-item">
       <div class="comment-meta">
@@ -1734,8 +1747,7 @@ async function refreshPeopleList() {
       apiGet({ action: 'getAttendance' }),
       apiGet({ action: 'getHistory' }).catch(() => ({}))
     ]);
-    const dt = new Date();
-    const todayDs = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    const todayDs = getTodayDs();
     todayLockedRest = (history && history[todayDs]) || null;
     updatePeopleList(data);
   } catch(e) {}
@@ -1876,6 +1888,7 @@ async function loadMyPrefs() {
     myPrefs = bundle.preferences || {};
     commentsCache = bundle.comments || {};
     prefLockStatus = bundle.lockStatus || DEFAULT_LOCK;
+    if (bundle.today) serverToday = bundle.today;
     rebuildOrderedList();
     renderPrefsList();
     initSortable();
@@ -1907,6 +1920,17 @@ async function loadMyPrefs() {
 
 function isAdminUser() {
   return (myName || '').trim().toLowerCase() === 'admin';
+}
+
+// 取得 admin 共用密碼：整個瀏覽器分頁只問一次，之後存在 sessionStorage。
+// 後端 requireAdmin() 會比對這個密碼；密碼錯 → 後端回 error、動作不生效。
+function getAdminSecret() {
+  let secret = sessionStorage.getItem('adminSecret');
+  if (!secret) {
+    secret = (prompt('請輸入管理密碼：') || '').trim();
+    if (secret) sessionStorage.setItem('adminSecret', secret);
+  }
+  return secret;
 }
 
 // 顯示/隱藏 admin 卡片並同步 toggle 狀態，admin 時也隱藏個人偏好相關 UI
@@ -1994,7 +2018,7 @@ async function applyExcludeDays() {
   applyBtn.disabled = true;
   applyBtn.textContent = '...';
   try {
-    const res = await apiPost({ action: 'setExcludeWorkdays', days: newVal });
+    const res = await apiPost({ action: 'setExcludeWorkdays', days: newVal, adminSecret: getAdminSecret() });
     if (res.success) {
       prefLockStatus.excludeDays = res.days;
       syncExcludeDaysUI();
@@ -2016,7 +2040,7 @@ async function toggleAdminOverride() {
   const currentlyOn = !!prefLockStatus.adminOverride;
   try {
     const action = currentlyOn ? 'disableAdminOverride' : 'enableAdminOverride';
-    const res = await apiPost({ action });
+    const res = await apiPost({ action, adminSecret: getAdminSecret() });
     if (res.success) {
       prefLockStatus.adminOverride = !currentlyOn;
       // 重新撈完整狀態（避免本地狀態不同步）
@@ -2122,8 +2146,11 @@ function renderPrefsList() {
   el.innerHTML = orderedPrefs.map((rest, idx) => {
     const rank = idx + 1;
     const rowClass = rank <= 3 ? 'top3' : (rank <= 10 ? 'top10' : '');
-    const safeRest = rest.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-    const escAttr = rest.replace(/"/g, '&quot;');
+    const safeRest = rest
+      .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escAttr = escapeHTML(rest);
     // 檢查評論狀態
     const list = commentsCache[rest] || [];
     const total = list.length;
@@ -2135,7 +2162,7 @@ function renderPrefsList() {
     return `
       <div class="pref-row ${rowClass}" data-rest="${escAttr}">
         <div class="pref-rank">#${rank}</div>
-        <div class="pref-name">${rest}</div>
+        <div class="pref-name">${escapeHTML(rest)}</div>
         <button class="pref-comment-btn ${btnClass}"
           data-rest="${escAttr}"
           onclick="event.stopPropagation();openCommentEdit('${safeRest}')"
@@ -2329,8 +2356,7 @@ async function addRestaurant() {
 async function loadHistoryPage() {
   const el = document.getElementById('historyList');
   const DAYS = ['日','一','二','三','四','五','六'];
-  const todayDt = new Date();
-  const todayDs = `${todayDt.getFullYear()}-${String(todayDt.getMonth()+1).padStart(2,'0')}-${String(todayDt.getDate()).padStart(2,'0')}`;
+  const todayDs = getTodayDs();
 
   // 把 history 資料渲染成畫面的內部函式
   const render = (history) => {
@@ -2385,7 +2411,7 @@ async function loadHistoryPage() {
           <div class="history-item ${isToday ? 'is-today' : ''}">
             <div>
               <div class="history-date">${dayInt} 日（${dayName}）</div>
-              <div class="history-rest">${rest || '—'}</div>
+              <div class="history-rest">${rest ? escapeHTML(rest) : '—'}</div>
             </div>
             <div class="history-days">${label}</div>
           </div>`;
@@ -2431,12 +2457,12 @@ function rebuildHistorySelect(todayRecord) {
   const sel = document.getElementById('historyRestSelect');
   if (!sel || !restaurants) return;
   const placeholder = todayRecord
-    ? `<option value="" disabled selected>今天已記錄：${todayRecord}（可重選覆蓋）</option>`
+    ? `<option value="" disabled selected>今天已記錄：${escapeHTML(todayRecord)}（可重選覆蓋）</option>`
     : `<option value="" disabled selected>— 請選擇 —</option>`;
   const clearOption = todayRecord
     ? '<option value="__clear__">🗑️ 清除今日紀錄</option>'
     : '';
-  const opts = restaurants.map(r => `<option value="${r}">${r}</option>`).join('');
+  const opts = restaurants.map(r => `<option value="${escapeHTML(r)}">${escapeHTML(r)}</option>`).join('');
   sel.innerHTML = placeholder + clearOption + opts;
   updateRecordButton();
 }
