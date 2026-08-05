@@ -1166,7 +1166,19 @@ async function init() {
   loadRanking();          // 先發可見的排名頁（自己的 SWR bundle，不需要餐廳清單）
   loadRestaurants();      // 不 await —— 只餵歷史頁下拉與偏好頁，別擋住排名頁
   if (myName) showNameDisplay();
+  prefetchPages();        // 背景暖「個人偏好」快取，讓首次切到偏好頁也秒開（fire-and-forget）
   initVersionHash();
+}
+
+// 背景預抓：把排名 bundle 沒順手播種到的分頁資料暖進 SWR 快取（含 localStorage 鏡像）。
+// - getHistory：已由 loadRanking 的 bundle.history 播種，不用抓。
+// - getAttendance：已由 loadRanking 的 participants 合成種子播種，不用抓。
+// - getPrefsPageData：因人而異、不在任何 bundle 裡，只有進偏好頁才會抓 → 這裡先暖，
+//   讓「第一次進偏好頁」也秒開。admin 走非-SWR 路徑、暖了不會被讀，故略過。
+function prefetchPages() {
+  if (myName && !isAdminUser()) {
+    apiGetSWR({ action: 'getPrefsPageData', person: myName }).catch(() => {});
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -1266,6 +1278,13 @@ async function loadRanking() {
     // 排名 bundle 本來就含 history —— 順手餵進「歷史頁」的 SWR 快取（含 localStorage 鏡像），
     // 這樣切到歷史頁可直接秒開，不必再打一次 getHistory 往返。
     if (bundle.history) _swrSetCache(_swrKey({ action: 'getHistory' }), bundle.history);
+    // 同理：ranking.participants 就是「今天出席的人」。合成 {name:true} 種子餵進 getAttendance
+    // 的 SWR 快取（顯示等價：名單只列出席者、我的開關 = 我是否在 participants）→ 出席頁也秒開。
+    if (Array.isArray(data.participants)) {
+      const synthAtt = {};
+      data.participants.forEach(p => { synthAtt[p] = true; });
+      _swrSetCache(_swrKey({ action: 'getAttendance' }), synthAtt);
+    }
     renderRanking(data);
   };
 
@@ -1671,6 +1690,7 @@ function closeHowItWorks(e) {
 // 出席頁
 // ══════════════════════════════════════════════
 let attendanceLoaded = false;
+let attendUserInteracted = false; // 使用者一旦動過出席切換鈕，背景 revalidate 就不得覆蓋 attending
 
 async function loadAttendPage() {
   if (myName) {
@@ -1704,6 +1724,8 @@ async function confirmName() {
   localStorage.setItem('lunchName', name);
   // 切換使用者 → 清空所有跟舊使用者相關的記憶體狀態
   resetUserState();
+  // 換了使用者 → 背景暖新使用者的偏好快取（fire-and-forget，不擋 UI）
+  prefetchPages();
   showNameDisplay();
   await refreshAttendance();
   // 若目前在偏好頁，重新載入以套用新使用者的介面（個人 vs admin）
@@ -1725,6 +1747,7 @@ function changeName() {
 // 切換使用者時，把所有跟舊使用者相關的本地狀態清空
 function resetUserState() {
   attendanceLoaded = false;
+  attendUserInteracted = false;
   attending = false;
   myPrefs = {};
   orderedPrefs = [];
@@ -1745,27 +1768,44 @@ function resetUserState() {
 }
 
 async function refreshAttendance() {
+  const applyAttendance = (data) => {
+    if (!data) return;
+    // 切換鈕：只有使用者「還沒動手」時才由伺服器/種子設定（避免覆蓋使用者自己剛按的切換）
+    if (!attendUserInteracted) {
+      // Admin 不參與出席，本地 attending 一律設為 false
+      attending = isAdminUser() ? false : (data[myName] || false);
+      updateToggleUI();
+    }
+    updatePeopleList(data); // 名單／鎖定畫面永遠可以先舊後新
+  };
   try {
-    const data = await apiGet({ action: 'getAttendance' });
-    // Admin 不參與出席，本地 attending 一律設為 false
-    attending = isAdminUser() ? false : (data[myName] || false);
-    updateToggleUI();
-    updatePeopleList(data);
+    // SWR：有種子/鏡像 → 立即套用（秒開），背景再抓真值校正名單（切換鈕受 flag 保護）
+    const data = await apiGetSWR({ action: 'getAttendance' }, (fresh) => {
+      if (fresh) applyAttendance(fresh);
+    });
+    applyAttendance(data);
   } catch(e) {
     showToast('無法載入出席狀態', 'error');
   }
 }
 
 async function refreshPeopleList() {
+  // 兩者都走 SWR（出席有 participants 種子、歷史有 ranking bundle 種子）→ 秒開；不碰 attending
+  let curData = null, curHistory = null;
+  const render = () => {
+    if (curHistory !== null) todayLockedRest = curHistory[getTodayDs()] || null;
+    if (curData) updatePeopleList(curData);
+  };
   try {
-    // 並行撈出席和歷史（為了判斷今天是否已記錄午餐）
-    const [data, history] = await Promise.all([
-      apiGet({ action: 'getAttendance' }),
-      apiGet({ action: 'getHistory' }).catch(() => ({}))
-    ]);
-    const todayDs = getTodayDs();
-    todayLockedRest = (history && history[todayDs]) || null;
-    updatePeopleList(data);
+    const dataP = apiGetSWR({ action: 'getAttendance' }, (fresh) => {
+      if (fresh) { curData = fresh; render(); }
+    });
+    const historyP = apiGetSWR({ action: 'getHistory' }, (fresh) => {
+      curHistory = fresh || {}; render();
+    }).catch(() => ({}));
+    const [data, history] = await Promise.all([dataP, historyP]);
+    curData = data; curHistory = history || {};
+    render();
   } catch(e) {}
 }
 
@@ -1826,6 +1866,7 @@ async function toggleAttend() {
     showToast('今日午餐已記錄，出席無法再變動', 'error');
     return;
   }
+  attendUserInteracted = true; // 切換鈕自此由使用者掌控，背景 getAttendance 不得回填
   attending = !attending;
   updateToggleUI();
   try {
