@@ -57,7 +57,7 @@
   .tab-btn {
     flex: 1; padding: 12px 4px; font-size: 13px; color: var(--muted);
     background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent;
-    transition: all .2s; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transition: color .2s, border-bottom-color .2s; display: flex; flex-direction: column; align-items: center; gap: 2px;
   }
   .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
   .tab-icon { font-size: 18px; }
@@ -65,7 +65,10 @@
   /* ── Content ── */
   .content { flex: 1; overflow-y: auto; padding: 16px; }
   .page { display: none; }
-  .page.active { display: block; }
+  /* 切頁時的輕微淡入，遮住重建那一幀、讓切換不那麼生硬 */
+  .page.active { display: block; animation: pageIn .18s ease-out; }
+  @keyframes pageIn { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .page.active { animation: none; } }
 
   /* ── Cards ── */
   .card {
@@ -101,7 +104,7 @@
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     border: none; border-radius: 8px; padding: 10px 18px;
     font-size: 14px; font-weight: 600; cursor: pointer;
-    font-family: inherit; transition: all .15s; white-space: nowrap;
+    font-family: inherit; transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s; white-space: nowrap;
   }
   .btn-primary {
     background: linear-gradient(90deg, var(--gold), var(--gold2));
@@ -278,7 +281,7 @@
     flex-shrink: 0; background: transparent;
     border: 1px solid var(--border); color: var(--muted);
     padding: 4px 8px; border-radius: 6px; cursor: pointer;
-    font-size: 12px; transition: all .15s;
+    font-size: 12px; transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
     position: relative;
     display: inline-flex; align-items: center; gap: 4px;
   }
@@ -394,7 +397,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
     min-width: 70px;
   }
   #prefsSaveBtn.dirty {
@@ -429,7 +432,7 @@
     background: var(--surface2); border: 1px solid var(--border);
     border-radius: 8px; color: var(--text);
     font-size: 18px; font-weight: 700; cursor: pointer;
-    transition: all .15s;
+    transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
     line-height: 1;
     user-select: none;
   }
@@ -575,7 +578,7 @@
     width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
     font-size: 13px; font-family: inherit; padding: 0;
-    transition: all .15s;
+    transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
   }
   .info-btn:active { transform: scale(.92); }
   .info-btn:hover { color: var(--gold); border-color: var(--gold); }
@@ -1238,6 +1241,8 @@ async function copyVersionInfo() {
 // Tab 切換
 // ══════════════════════════════════════════════
 function switchTab(tab) {
+  // 已經在這一頁 → 什麼都不做，避免重複點同一個 tab 觸發整頁重建與閃爍
+  if (tab === currentTab) return;
   // 離開偏好頁前，若有未儲存的變更，提示使用者
   if (currentTab === 'prefs' && tab !== 'prefs' && prefsDirty && !prefLockStatus.locked) {
     showToast('⚠️ 你有未儲存的偏好變更', 'error');
@@ -1310,7 +1315,22 @@ async function loadRanking() {
   }
 }
 
+// ── 渲染守衛 ──
+// 每個分頁記住「上次畫出來的內容指紋」。切回同一頁 / 背景 SWR 回來但資料沒變時，
+// 直接跳過整塊 innerHTML 重建 —— 避免重新 parse+reflow 造成的閃爍，也保住使用者
+// 當前的展開明細與捲動位置。只有指紋真的改變才重畫。
+const _renderSig = {};
+
+// 排名頁：包一層指紋守衛，涵蓋鎖定 / 空 / 正常三種分支
 function renderRanking(data) {
+  // 指紋須涵蓋所有會影響畫面的來源：排名資料、鎖定餐廳、身分，以及展開明細用到的評論快取
+  const sig = JSON.stringify({ d: data, locked: todayLockedRest, me: myName, c: commentsCache });
+  if (_renderSig.ranking === sig) return;   // 內容相同 → 不重建，保住展開/捲動狀態
+  _renderSig.ranking = sig;
+  _renderRankingImpl(data);
+}
+
+function _renderRankingImpl(data) {
   const el = document.getElementById('rankingContent');
 
   // 鎖定狀態：今天已記錄午餐 → 顯示「今天吃了 X」固定畫面
@@ -1746,6 +1766,8 @@ function changeName() {
 
 // 切換使用者時，把所有跟舊使用者相關的本地狀態清空
 function resetUserState() {
+  // 清掉渲染指紋 —— 換使用者後每頁都必須重畫一次
+  _renderSig.ranking = _renderSig.history = _renderSig.people = null;
   attendanceLoaded = false;
   attendUserInteracted = false;
   attending = false;
@@ -1810,6 +1832,10 @@ async function refreshPeopleList() {
 }
 
 function updatePeopleList(data) {
+  // 指紋守衛：出席名單沒變就不重寫 chips（避免背景 SWR 回來時名單閃動）
+  const sig = JSON.stringify({ d: data, locked: todayLockedRest, admin: isAdminUser(), me: myName });
+  if (_renderSig.people === sig) return;
+  _renderSig.people = sig;
   const attendees = Object.keys(data).filter(p => data[p]);
   const chipsHTML = attendees.length === 0
     ? '<span style="color:var(--muted);font-size:13px">還沒有人加入</span>'
@@ -2417,6 +2443,10 @@ async function loadHistoryPage() {
 
   // 把 history 資料渲染成畫面的內部函式
   const render = (history) => {
+    // 指紋守衛：資料沒變就不重建（保住捲動位置、避免閃爍）
+    const sig = JSON.stringify({ h: history, today: todayDs });
+    if (_renderSig.history === sig) return;
+    _renderSig.history = sig;
     const allDates = Object.keys(history)
       .filter(ds => history[ds])
       .sort((a, b) => b.localeCompare(a));
