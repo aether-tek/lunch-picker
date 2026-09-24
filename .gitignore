@@ -1,0 +1,7 @@
+# 搬遷用的匯出資料（含同事名字與評論）與服務帳戶金鑰，不要 commit
+migration/lunch-export-*.json
+migration/sa.json
+migration/node_modules/
+firestore-debug.log
+firebase-debug.log
+ui-debug.log

@@ -958,9 +958,9 @@
 
 <script>
 // ══════════════════════════════════════════════
-// 設定：請填入你的 Apps Script 部署網址
+// 後端：Firestore 資料層（data.js），action 與回傳格式同舊版 Apps Script
 // ══════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbzP-dWpuvYYolswW1OJ12d78TtebeJ0Yv0TN0jHsmI10xur3vp-Iu7h-ZW1on7ONim_/exec';
+const backendReady = import('./data.js');
 
 // ══════════════════════════════════════════════
 // 狀態
@@ -996,59 +996,22 @@ function escapeHTML(s) {
 // ══════════════════════════════════════════════
 // API 工具
 // ══════════════════════════════════════════════
-// Apps Script 部署的 echo URL 有時會偶發 404（Google 平台已知問題）
-// 這個 helper 在失敗時自動 retry 幾次，通常第二次就會成功。
-async function fetchWithRetry(url, options, maxRetries) {
-  maxRetries = maxRetries || 4;
-  const TIMEOUT_MS = 7000; // 單次請求超過 7 秒就放棄，重試拿新的 echo key（通常更快）
-  let lastError;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // 用 AbortController 做 timeout —— Apps Script 的 echo 404 有時會傻等 10-16 秒才回應，
-    // 與其等它，不如超時後直接重試（重試會重打 exec URL，拿到新的有效 echo key）
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      const res = await fetch(url, Object.assign({}, options, { signal: controller.signal }));
-      clearTimeout(timer);
-      // 404 也算失敗要 retry（Apps Script 的 echo URL 偶發失效）
-      if (res.status === 404 && attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 200 * attempt)); // 短退避
-        continue;
-      }
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res;
-    } catch (e) {
-      clearTimeout(timer);
-      lastError = e;
-      if (attempt < maxRetries) {
-        // timeout(abort) 或其他錯誤 → 立刻重試（不等太久）
-        await new Promise(r => setTimeout(r, 200 * attempt));
-        continue;
-      }
-    }
-  }
-  throw lastError || new Error('Fetch failed after ' + maxRetries + ' attempts');
-}
-
+// 舊版 Apps Script 需要 fetchWithRetry（逾時 + 重試）；Firestore SDK 自己處理連線與重試，
+// 這裡只保留 apiGet / apiPost 兩個入口，讓既有 UI 程式碼不用改。
 async function apiGet(params) {
-  const url = new URL(API_URL);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-  const res = await fetchWithRetry(url.toString(), { redirect: 'follow' });
-  return res.json();
+  const backend = await backendReady;
+  const result = await backend.get(params);
+  // 讀取失敗一律 throw，避免 SWR 把錯誤物件當成資料快取起來
+  if (result && !Array.isArray(result) && result.error) throw new Error(result.error);
+  return result;
 }
 
 async function apiPost(body) {
-  // 用 text/plain 避免 CORS preflight (OPTIONS)，Apps Script 不支援 OPTIONS
-  const res = await fetchWithRetry(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body),
-    redirect: 'follow'
-  });
-  const result = await res.json();
+  const backend = await backendReady;
+  const result = await backend.post(body);
   // 寫入操作完成 → 清空所有 SWR 快取，下次讀 GET 一定拿到最新資料
   // 只有真的 success 才清，避免失敗還把好快取砍掉
-  if (result && result.success !== false) {
+  if (result && result.success !== false && !result.error) {
     invalidateSWR();
   }
   return result;
@@ -2005,15 +1968,10 @@ function isAdminUser() {
   return (myName || '').trim().toLowerCase() === 'admin';
 }
 
-// 取得 admin 共用密碼：整個瀏覽器分頁只問一次，之後存在 sessionStorage。
-// 後端 requireAdmin() 會比對這個密碼；密碼錯 → 後端回 error、動作不生效。
+// 舊版的 admin 共用密碼已停用：管理動作改由 data.js 跳出 Google 登入，
+// 再由 firestore.rules 比對 admins/{uid} 白名單。保留這個函式只為了不動呼叫端。
 function getAdminSecret() {
-  let secret = sessionStorage.getItem('adminSecret');
-  if (!secret) {
-    secret = (prompt('請輸入管理密碼：') || '').trim();
-    if (secret) sessionStorage.setItem('adminSecret', secret);
-  }
-  return secret;
+  return '';
 }
 
 // 顯示/隱藏 admin 卡片並同步 toggle 狀態，admin 時也隱藏個人偏好相關 UI

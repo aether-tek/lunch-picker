@@ -1,0 +1,133 @@
+rules_version = '2';
+
+// 午餐決策系統 Firestore 規則（身分模式 A：一般使用者不登入，信任程度與舊版 Apps Script 相同）
+// - 一般使用者：以輸入的名字識別，rules 只做格式與時間鎖檢查
+// - admin：用 Google 登入，uid 必須存在於 admins/{uid}（在 Firebase console 手動建立）
+// - 文件 ID：名字/餐廳名一律經 encodeURIComponent，避免 '/' 等字元
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 共用工具 ──────────────────────────────────────────
+
+    // 台北時間（UTC+8，無夏令時間）
+    function taipei() { return request.time + duration.value(8, 'h'); }
+    function pad2(n) { return n < 10 ? '0' + string(n) : string(n); }
+    function todayStr() {
+      let t = taipei();
+      return string(t.year()) + '-' + pad2(t.month()) + '-' + pad2(t.day());
+    }
+
+    function settings() {
+      return get(/databases/$(database)/documents/config/settings).data;
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isReserved(name) { return name.lower() == 'admin'; }
+
+    // 對應舊版 isPreferenceLocked()：
+    //   12:00 後鎖定，除非今日已記錄午餐，或 admin 已啟用今日 override
+    function prefLocked() {
+      return taipei().hours() >= 12
+        && !exists(/databases/$(database)/documents/history/$(todayStr()))
+        && settings().get('overrideDate', '') != todayStr();
+    }
+
+    function isNonEmptyString(v, maxLen) {
+      return v is string && v.size() > 0 && v.size() <= maxLen;
+    }
+
+    // ── 餐廳 ─────────────────────────────────────────────
+    // 舊版任何人都能新增 / 刪除餐廳，這裡維持相同行為
+    match /restaurants/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['name', 'createdAt'])
+        && isNonEmptyString(request.resource.data.name, 50)
+        && request.resource.data.createdAt == request.time;
+      allow delete: if true;
+      allow update: if false;
+    }
+
+    // ── 偏好：一人一份文件，order[i] = 第 i+1 名 ──────────
+    match /preferences/{id} {
+      allow read: if true;
+
+      // 正常儲存：受 12:00 鎖定限制
+      allow create, update: if request.resource.data.keys().hasOnly(['person', 'order', 'updatedAt'])
+        && isNonEmptyString(request.resource.data.person, 30)
+        && !isReserved(request.resource.data.person)
+        && request.resource.data.order is list
+        && request.resource.data.order.size() <= 200
+        && request.resource.data.updatedAt == request.time
+        && !prefLocked();
+
+      // 刪除餐廳時的連帶清理：只能「移除」名單中的項目，不受鎖定限制
+      // （對應舊版 cascadeDeleteRestaurantPrefs 不檢查鎖定）
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['order', 'updatedAt'])
+        && request.resource.data.order is list
+        && request.resource.data.order.size() < resource.data.order.size()
+        && resource.data.order.toSet().hasAll(request.resource.data.order.toSet())
+        && request.resource.data.updatedAt == request.time;
+
+      // 新增餐廳時自動補到每人最後一名：只能「多加一家」且原有項目不變，不受鎖定限制
+      // （對應舊版 autoAppendNewRestaurantToAllUsers 不檢查鎖定）
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['order', 'updatedAt'])
+        && request.resource.data.order is list
+        && request.resource.data.order.size() == resource.data.order.size() + 1
+        && request.resource.data.order.toSet().hasAll(resource.data.order.toSet())
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    // ── 出席：一天一份文件，{ 名字: true/false } ───────────
+    match /attendance/{date} {
+      allow read: if true;
+      allow create, update: if date == todayStr()
+        && !request.resource.data.keys().hasAny(['admin', 'Admin', 'ADMIN'])
+        && request.resource.data.keys().size() <= 100;
+      allow delete: if false;
+    }
+
+    // ── 歷史：一天一份文件，只能寫「今天」 ──────────────────
+    match /history/{date} {
+      allow read: if true;
+      allow create, update: if date == todayStr()
+        && request.resource.data.keys().hasOnly(['restaurant'])
+        && isNonEmptyString(request.resource.data.restaurant, 50);
+      allow delete: if date == todayStr();   // 對應舊版 recordHistory('__clear__')
+    }
+
+    // ── 評論：ID = encode(restaurant) + '__' + encode(person) ─
+    match /comments/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['restaurant', 'person', 'comment', 'updatedAt'])
+        && isNonEmptyString(request.resource.data.restaurant, 50)
+        && isNonEmptyString(request.resource.data.person, 30)
+        && !isReserved(request.resource.data.person)
+        && isNonEmptyString(request.resource.data.comment, 150)
+        && request.resource.data.updatedAt is string;
+      allow delete: if true;   // 清空評論 / 刪除餐廳連帶刪除
+    }
+
+    // ── 系統設定：只有 admin 能改 ──────────────────────────
+    match /config/settings {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['excludeWorkdays', 'overrideDate'])
+        && request.resource.data.excludeWorkdays is int
+        && request.resource.data.excludeWorkdays >= 3
+        && request.resource.data.excludeWorkdays <= 20
+        && request.resource.data.get('overrideDate', '') is string;
+    }
+
+    // ── admin 白名單：只能在 console / admin SDK 建立 ───────
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+  }
+}
